@@ -1,5 +1,4 @@
 # Osprey Robotics Demo for Proof of Life
-# TODO: Global state for threads, join threads when key no longer pressed?
 
 import binascii
 import usb1
@@ -7,9 +6,12 @@ import time
 import threading
 import curses
 
-all_motors = []
-
 # Constants
+STOP = 0
+FORWARD = 1
+LEFT = 1
+RIGHT = 1
+BACKWARD = 1
 SER_FRONT_LEFT_1 = "205A336B4E55"
 SER_BACK_LEFT_2 = "2061376C4243"
 SER_BACK_RIGHT_3 = "206D33614D43"
@@ -18,34 +20,98 @@ SER_FRONT_RIGHT_4 = "206B336B4E55"
 NEGATIVE_40 = binascii.a2b_hex("000000008400058208000000cdccccbe0000000032a34b88")
 POSITIVE_40 = binascii.a2b_hex("000000008400058208000000cdcccc3e000000000af69afb")
 
-def bulkWrite(dev, data, endpoint=0x02, timeout=None):
-    dev.bulkWrite(endpoint, data, timeout=(1000 if timeout is None else timeout))
+COMM_FORWARD = ["00000000802c058208000000100000000000000095e92111", "00000000802c0582080000001000000000000000a6102211", "00000000802c0582080000001000000000000000b6372211", "00000000802c0582080000001000000000000000c75e2211", "00000000802c0582080000001000000000000000d8852211"]
 
-def forward(serial, dev):
+CURRENT_ACTION = 0
+all_motors = []
+
+def move_forward(serial, dev):
+    global CURRENT_ACTION, FORWARD
+    dev.claimInterface(0)
     # TODO: Replace static file with one message and timestamp-packed last bytes, they shouldn't be much different
-    comm=open("commtestcan").read().splitlines()
     if serial == SER_FRONT_LEFT_1: # Front left, 1
-        bulkWrite(dev, POSITIVE_40)
+        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
     elif serial == SER_BACK_LEFT_2: # Back left, 2
-        bulkWrite(dev, POSITIVE_40)
+        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
     elif serial == SER_BACK_RIGHT_3: # Back right, 3
-        bulkWrite(dev, NEGATIVE_40)
+        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
     elif serial == SER_FRONT_RIGHT_4: # Front right, 4
-        bulkWrite(dev, NEGATIVE_40)
+        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
     else:
         raise Exception("Unknown serial detected: %s" % serial)
-    while True:
-        try:
-            for line in comm:
-                bulkWrite(0x02, binascii.a2b_hex(line))
-                time.sleep(.05)
-        except Exception:
-            return
+    try:
+        for line in COMM_FORWARD:
+            dev.bulkWrite(0x02, binascii.a2b_hex(line))
+            time.sleep(.1)
+    except Exception as e:
+        #print("Error: %s" % str(e))
+        return
 
-def run_motor(dev):
-    dev[1].claimInterface(0)
-    dev[1].resetDevice()
-    forward(dev[0], dev[1])
+def move_backward(serial, dev):
+    global CURRENT_ACTION, BACKWARD
+    dev.claimInterface(0)
+    # TODO: Replace static file with one message and timestamp-packed last bytes, they shouldn't be much different
+    if serial == SER_FRONT_LEFT_1: # Front left, 1
+        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
+    elif serial == SER_BACK_LEFT_2: # Back left, 2
+        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
+    elif serial == SER_BACK_RIGHT_3: # Back right, 3
+        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
+    elif serial == SER_FRONT_RIGHT_4: # Front right, 4
+        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
+    else:
+        raise Exception("Unknown serial detected: %s" % serial)
+    try:
+        for line in COMM_FORWARD:
+            dev.bulkWrite(0x02, binascii.a2b_hex(line))
+            time.sleep(.1)
+    except Exception as e:
+        #print("Error: %s" % str(e))
+        return
+
+def spin_left(serial, dev):
+    global CURRENT_ACTION, LEFT
+    dev.claimInterface(0)
+    # TODO: Replace static file with one message and timestamp-packed last bytes, they shouldn't be much different
+    if serial == SER_FRONT_LEFT_1: # Front left, 1
+        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
+    elif serial == SER_BACK_LEFT_2: # Back left, 2
+        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
+    elif serial == SER_BACK_RIGHT_3: # Back right, 3
+        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
+    elif serial == SER_FRONT_RIGHT_4: # Front right, 4
+        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
+    else:
+        raise Exception("Unknown serial detected: %s" % serial)
+    try:
+        for line in COMM_FORWARD:
+            dev.bulkWrite(0x02, binascii.a2b_hex(line))
+            time.sleep(.1)
+    except Exception as e:
+        #print("Error: %s" % str(e))
+        return
+
+def spin_right(serial, dev):
+    global CURRENT_ACTION, RIGHT
+    dev.claimInterface(0)
+    # TODO: Replace static file with one message and timestamp-packed last bytes, they shouldn't be much different
+    if serial == SER_FRONT_LEFT_1: # Front left, 1
+        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
+    elif serial == SER_BACK_LEFT_2: # Back left, 2
+        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
+    elif serial == SER_BACK_RIGHT_3:  # Back right, 3
+        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
+    elif serial == SER_FRONT_RIGHT_4: # Front right, 4
+        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
+    else:
+        raise Exception("Unknown serial detected: %s" % serial)
+    try:
+        for line in COMM_FORWARD:
+            dev.bulkWrite(0x02, binascii.a2b_hex(line))
+            time.sleep(.1)
+    except Exception as e:
+        #print("Error: %s" % str(e))
+        return
 
 def open_dev(usbcontext=None):
     if usbcontext is None:
@@ -57,11 +123,14 @@ def open_dev(usbcontext=None):
         device = udev.getDeviceAddress()
         serial = udev.getSerialNumber()
         if ((vid, pid) == (0x0483, 0xA30E)):
-            all_motors.append((serial, udev.open()))
-    #if len(all_motors) < 2:
-    #    raise Exception("Insufficient motors detected")
+            motor = udev.open()
+            motor.resetDevice()
+            all_motors.append((serial, motor))
+    if len(all_motors) < 4:
+        raise Exception("Insufficient motors detected")
 
 def main(win):
+    global CURRENT_ACTION, STOP, FORWARD
     win.nodelay(True)
     key=""
     win.clear()
@@ -78,9 +147,8 @@ def main(win):
             # No input
             pass
     #print(all_motors)
-    for motor in all_motors:
-        t= threading.Thread(target=run_motor, args=(motor,))
-        t.start()
+    win.clear()
+    win.addstr("Detected key:")
     while True:
         try:
            key = win.getkey()
@@ -89,8 +157,35 @@ def main(win):
            win.addstr(repr(str(key)))
            if key == "q":
               break
+           elif key == "w":
+               if CURRENT_ACTION == STOP:
+                   CURRENT_ACTION = FORWARD
+                   for motor in all_motors:
+                       t=threading.Thread(target=move_forward, args=(motor[0],motor[1]))
+                       t.start()
+           elif key == "a":
+               if CURRENT_ACTION == STOP:
+                   CURRENT_ACTION = LEFT
+                   for motor in all_motors:
+                       t=threading.Thread(target=spin_left, args=(motor[0],motor[1]))
+                       t.start()
+           elif key == "s":
+               if CURRENT_ACTION == STOP:
+                   CURRENT_ACTION = BACKWARD
+                   for motor in all_motors:
+                       t=threading.Thread(target=move_backward, args=(motor[0],motor[1]))
+                       t.start()
+           elif key == "d":
+               if CURRENT_ACTION == STOP:
+                   CURRENT_ACTION = RIGHT
+                   for motor in all_motors:
+                       t=threading.Thread(target=spin_right, args=(motor[0],motor[1]))
+                       t.start()
+           else:
+               pass
         except Exception as e:
            # No input
+           CURRENT_ACTION = STOP
            pass
 
 curses.wrapper(main)
