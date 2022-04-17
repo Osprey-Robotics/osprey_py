@@ -12,103 +12,136 @@ FORWARD = 1
 LEFT = 1
 RIGHT = 1
 BACKWARD = 1
+MOTOR_SLEEP = 0.4
 SER_FRONT_LEFT_1 = "205A336B4E55"
 SER_BACK_LEFT_2 = "2061376C4243"
 SER_BACK_RIGHT_3 = "206D33614D43"
 SER_FRONT_RIGHT_4 = "206B336B4E55"
-# TODO: Use dictionary instead. cdccccbe and cdcccc3e would be mapped to keys of -40 and 40 respectively
-NEGATIVE_40 = binascii.a2b_hex("000000008400058208000000cdccccbe0000000032a34b88")
-POSITIVE_40 = binascii.a2b_hex("000000008400058208000000cdcccc3e000000000af69afb")
 
-COMM_FORWARD = ["00000000802c058208000000100000000000000095e92111", "00000000802c0582080000001000000000000000a6102211", "00000000802c0582080000001000000000000000b6372211", "00000000802c0582080000001000000000000000c75e2211", "00000000802c0582080000001000000000000000d8852211"]
+# TODO: Better interface for motor controller protocol
+POSITIVE_HEX = "000000008400058208000000XXXXXXXX000000000af69afb"
+COMM_FORWARD = ["00000000802c058208000000100000000000000095e92111",
+                "00000000802c0582080000001000000000000000a6102211",
+                "00000000802c0582080000001000000000000000b6372211",
+                "00000000802c0582080000001000000000000000c75e2211",
+                "00000000802c0582080000001000000000000000d8852211"]
 
+SPEED_DICT = {
+        -100: "000080bf",
+        -90 : "666666bf",
+        -80 : "cdcc4cbf",
+        -70 : "333333bf",
+        -60 : "9a9919bf",
+        -50 : "000000bf",
+        -40 : "cdccccbe",
+        -30 : "9a9999be",
+        -20 : "cdcc4cbe",
+        -10 : "cdccccbd",
+        0   : "00000080",
+        10  : "cdcccc3d",
+        20  : "cdcc4c3e",
+        30  : "9a99993e",
+        40  : "cdcccc3e",
+        50  : "0000003f",
+        60  : "9a99193f",
+        70  : "3333333f",
+        80  : "cdcc4c3f",
+        90  : "6666663f",
+        100 : "0000803f"
+}
+
+def generate_speed(speed):
+    # TODO: Test if there's a difference between positive and negative hex value
+    return binascii.a2b_hex(POSITIVE_HEX.replace("XXXXXXXX", SPEED_DICT[speed]))
+
+CURRENT_SPEED = 40
 CURRENT_ACTION = 0
 all_motors = []
 
 def move_forward(serial, dev):
-    global CURRENT_ACTION, FORWARD
+    global CURRENT_ACTION, FORWARD, MOTOR_SLEEP
     dev.claimInterface(0)
     # TODO: Replace static file with one message and timestamp-packed last bytes, they shouldn't be much different
     if serial == SER_FRONT_LEFT_1: # Front left, 1
-        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
     elif serial == SER_BACK_LEFT_2: # Back left, 2
-        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
     elif serial == SER_BACK_RIGHT_3: # Back right, 3
-        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
     elif serial == SER_FRONT_RIGHT_4: # Front right, 4
-        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
     else:
         raise Exception("Unknown serial detected: %s" % serial)
     try:
         for line in COMM_FORWARD:
             dev.bulkWrite(0x02, binascii.a2b_hex(line))
-            time.sleep(.1)
+            time.sleep(MOTOR_SLEEP)
     except Exception as e:
         #print("Error: %s" % str(e))
         return
 
 def move_backward(serial, dev):
-    global CURRENT_ACTION, BACKWARD
+    global CURRENT_ACTION, BACKWARD, MOTOR_SLEEP
     dev.claimInterface(0)
     # TODO: Replace static file with one message and timestamp-packed last bytes, they shouldn't be much different
     if serial == SER_FRONT_LEFT_1: # Front left, 1
-        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
     elif serial == SER_BACK_LEFT_2: # Back left, 2
-        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
     elif serial == SER_BACK_RIGHT_3: # Back right, 3
-        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
     elif serial == SER_FRONT_RIGHT_4: # Front right, 4
-        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
     else:
         raise Exception("Unknown serial detected: %s" % serial)
     try:
         for line in COMM_FORWARD:
             dev.bulkWrite(0x02, binascii.a2b_hex(line))
-            time.sleep(.1)
+            time.sleep(MOTOR_SLEEP)
     except Exception as e:
         #print("Error: %s" % str(e))
         return
 
 def spin_left(serial, dev):
-    global CURRENT_ACTION, LEFT
+    global CURRENT_ACTION, LEFT, MOTOR_SLEEP
     dev.claimInterface(0)
     # TODO: Replace static file with one message and timestamp-packed last bytes, they shouldn't be much different
     if serial == SER_FRONT_LEFT_1: # Front left, 1
-        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
     elif serial == SER_BACK_LEFT_2: # Back left, 2
-        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
     elif serial == SER_BACK_RIGHT_3: # Back right, 3
-        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
     elif serial == SER_FRONT_RIGHT_4: # Front right, 4
-        dev.bulkWrite(0x02, POSITIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
     else:
         raise Exception("Unknown serial detected: %s" % serial)
     try:
         for line in COMM_FORWARD:
             dev.bulkWrite(0x02, binascii.a2b_hex(line))
-            time.sleep(.1)
+            time.sleep(MOTOR_SLEEP)
     except Exception as e:
         #print("Error: %s" % str(e))
         return
 
 def spin_right(serial, dev):
-    global CURRENT_ACTION, RIGHT
+    global CURRENT_ACTION, RIGHT, MOTOR_SLEEP
     dev.claimInterface(0)
     # TODO: Replace static file with one message and timestamp-packed last bytes, they shouldn't be much different
     if serial == SER_FRONT_LEFT_1: # Front left, 1
-        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
     elif serial == SER_BACK_LEFT_2: # Back left, 2
-        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
     elif serial == SER_BACK_RIGHT_3:  # Back right, 3
-        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
     elif serial == SER_FRONT_RIGHT_4: # Front right, 4
-        dev.bulkWrite(0x02, NEGATIVE_40, timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
     else:
         raise Exception("Unknown serial detected: %s" % serial)
     try:
         for line in COMM_FORWARD:
             dev.bulkWrite(0x02, binascii.a2b_hex(line))
-            time.sleep(.1)
+            time.sleep(MOTOR_SLEEP)
     except Exception as e:
         #print("Error: %s" % str(e))
         return
@@ -130,7 +163,7 @@ def open_dev(usbcontext=None):
         raise Exception("Insufficient motors detected")
 
 def main(win):
-    global CURRENT_ACTION, STOP, FORWARD
+    global CURRENT_SPEED, CURRENT_ACTION, STOP, FORWARD
     win.nodelay(True)
     key=""
     win.clear()
@@ -148,13 +181,11 @@ def main(win):
             pass
     #print(all_motors)
     win.clear()
+    win.addstr("Speed: %i\n" % CURRENT_SPEED)
     win.addstr("Detected key:")
     while True:
         try:
            key = win.getkey()
-           win.clear()
-           win.addstr("Detected key:")
-           win.addstr(repr(str(key)))
            if key == "q":
               break
            elif key == "w":
@@ -181,8 +212,22 @@ def main(win):
                    for motor in all_motors:
                        t=threading.Thread(target=spin_right, args=(motor[0],motor[1]))
                        t.start()
+           elif key == "+":
+               if CURRENT_SPEED == 100:
+                   pass
+               else:
+                   CURRENT_SPEED += 10
+           elif key == "-":
+               if CURRENT_SPEED == -100:
+                   pass
+               else:
+                   CURRENT_SPEED -= 10
            else:
                pass
+           win.clear()
+           win.addstr("Speed: %i\n" % CURRENT_SPEED)
+           win.addstr("Detected key:")
+           win.addstr(repr(str(key)))
         except Exception as e:
            # No input
            CURRENT_ACTION = STOP
