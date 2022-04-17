@@ -51,7 +51,6 @@ SPEED_DICT = {
 }
 
 def generate_speed(speed):
-    # TODO: Test if there's a difference between positive and negative hex value
     return binascii.a2b_hex(POSITIVE_HEX.replace("XXXXXXXX", SPEED_DICT[speed]))
 
 CURRENT_SPEED = 40
