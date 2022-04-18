@@ -1,10 +1,11 @@
 # Osprey Robotics Demo for Proof of Life
 
 import binascii
-import usb1
+import curses
+import struct
 import time
 import threading
-import curses
+import usb1
 
 # Constants
 STOP = 0
@@ -26,34 +27,10 @@ COMM_FORWARD = ["00000000802c058208000000100000000000000095e92111",
                 "00000000802c0582080000001000000000000000c75e2211",
                 "00000000802c0582080000001000000000000000d8852211"]
 
-SPEED_DICT = {
-        -100: "000080bf",
-        -90 : "666666bf",
-        -80 : "cdcc4cbf",
-        -70 : "333333bf",
-        -60 : "9a9919bf",
-        -50 : "000000bf",
-        -40 : "cdccccbe",
-        -30 : "9a9999be",
-        -20 : "cdcc4cbe",
-        -10 : "cdccccbd",
-        0   : "00000080",
-        10  : "cdcccc3d",
-        20  : "cdcc4c3e",
-        30  : "9a99993e",
-        40  : "cdcccc3e",
-        50  : "0000003f",
-        60  : "9a99193f",
-        70  : "3333333f",
-        80  : "cdcc4c3f",
-        90  : "6666663f",
-        100 : "0000803f"
-}
-
 def generate_speed(speed):
-    return binascii.a2b_hex(POSITIVE_HEX.replace("XXXXXXXX", SPEED_DICT[speed]))
+    return binascii.a2b_hex(POSITIVE_HEX.replace("XXXXXXXX", str(binascii.hexlify(struct.pack('<f', speed)), "ascii")))
 
-CURRENT_SPEED = 40
+CURRENT_SPEED = 0.4 # 40%
 CURRENT_ACTION = 0
 all_motors = []
 
@@ -180,7 +157,7 @@ def main(win):
             pass
     #print(all_motors)
     win.clear()
-    win.addstr("Speed: %i\n" % CURRENT_SPEED)
+    win.addstr("Speed: %i%%\n" % (CURRENT_SPEED*100))
     win.addstr("Detected key:")
     while True:
         try:
@@ -212,19 +189,19 @@ def main(win):
                        t=threading.Thread(target=spin_right, args=(motor[0],motor[1]))
                        t.start()
            elif key == "+":
-               if CURRENT_SPEED == 100:
+               if CURRENT_SPEED == 1.0:
                    pass
                else:
-                   CURRENT_SPEED += 10
+                   CURRENT_SPEED += .05
            elif key == "-":
-               if CURRENT_SPEED == -100:
+               if CURRENT_SPEED == -1.0:
                    pass
                else:
-                   CURRENT_SPEED -= 10
+                   CURRENT_SPEED -= .05
            else:
                pass
            win.clear()
-           win.addstr("Speed: %i\n" % CURRENT_SPEED)
+           win.addstr("Speed: %i%%\n" % (CURRENT_SPEED*100))
            win.addstr("Detected key:")
            win.addstr(repr(str(key)))
         except Exception as e:
