@@ -23,8 +23,8 @@ SER_FRONT_LEFT_1 = "205A336B4E55"
 SER_BACK_LEFT_2 = "2061376C4243"
 SER_BACK_RIGHT_3 = "206D33614D43"
 SER_FRONT_RIGHT_4 = "206B336B4E55"
-SER_LADDER_LIFT = "206C395A5543"
-SER_LADDER_DIG = "206A33544D43"
+SER_LADDER_DIG = "206C395A5543"
+SER_LADDER_LIFT = "206A33544D43"
 # TODO: Better interface for motor controller protocol, including timestamp/iterative-packed last bytes
 POSITIVE_HEX = "000000008400058208000000XXXXXXXX000000000af69afb"
 COMM_FORWARD = "00000000802c058208000000100000000000000095e92111"
@@ -176,7 +176,7 @@ def lower_bucket_ladder(serial, dev):
     global CURRENT_ACTION, DOWN, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
     dev.claimInterface(0)
     if serial == SER_LADDER_LIFT:
-        dev.bulkWrite(0x02, generate_speed(0.1), timeout=1000) # Locked at 10%
+        dev.bulkWrite(0x02, generate_speed(0.15), timeout=1000) # Locked at 15%
     else:
         raise Exception("Unknown serial detected: %s" % serial)
     try:
@@ -190,7 +190,7 @@ def raise_bucket_ladder(serial, dev):
     global CURRENT_ACTION, UP, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
     dev.claimInterface(0)
     if serial == SER_LADDER_LIFT:
-        dev.bulkWrite(0x02, generate_speed(-0.1), timeout=1000) # Locked at -10%
+        dev.bulkWrite(0x02, generate_speed(-0.15), timeout=1000) # Locked at -15%
     else:
         raise Exception("Unknown serial detected: %s" % serial)
     try:
@@ -204,7 +204,7 @@ def dig_bucket_ladder(serial, dev):
     global CURRENT_ACTION, DIG, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
     dev.claimInterface(0)
     if serial == SER_LADDER_DIG:
-        dev.bulkWrite(0x02, generate_speed(0.1), timeout=1000) # Locked at 10%
+        dev.bulkWrite(0x02, generate_speed(0.15), timeout=1000) # Locked at 15%
     else:
         raise Exception("Unknown serial detected: %s" % serial)
     try:
@@ -222,7 +222,11 @@ def open_dev(usbcontext=None):
         vid = udev.getVendorID()
         pid = udev.getProductID()
         device = udev.getDeviceAddress()
-        serial = udev.getSerialNumber()
+        try:
+            serial = udev.getSerialNumber()
+        except Exception:
+            # TODO: Handle this better
+            serial = ""
         if ((vid, pid) == (0x0483, 0xA30E)):
             motor = udev.open()
             motor.resetDevice()
@@ -304,11 +308,12 @@ def main(win):
                        t=threading.Thread(target=kill, args=(motor[0],motor[1]))
                        t.start()
            elif key == "x":
-               if CURRENT_ACTION != STOP:
+               if CURRENT_ACTION == STOP:
                    CURRENT_ACTION = DIG
                    for motor in all_digging_motors:
                        t=threading.Thread(target=dig_bucket_ladder, args=(motor[0],motor[1]))
                        t.start()
+                   time.sleep(MOTOR_SLEEP)
            elif key == "+":
                if ("%.2f" % CURRENT_SPEED) == ("%.2f" % 1.0):
                    pass
