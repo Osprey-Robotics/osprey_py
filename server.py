@@ -16,6 +16,8 @@ UP = 5
 DOWN = 6
 DIG = 7
 MOTOR_SLEEP = 0.05 #0.4
+RIGHT_SIDE = 1
+LEFT_SIDE = 2
 LAST_DRIVE_WAIT = 1.0
 SER_FRONT_LEFT_1 = "205A336B4E55"
 SER_BACK_LEFT_2 = "2061376C4243"
@@ -31,7 +33,8 @@ COMM_FORWARD = "00000000802c058208000000100000000000000095e92111"
 # Variables
 CURRENT_ACTION = 0
 LAST_DRIVE = 0
-all_wheel_motors = []
+all_right_wheel_motors = []
+all_left_wheel_motors = []
 all_ladder_position_motors = []
 all_digging_motors = []
 
@@ -66,17 +69,25 @@ def kill(serial, dev):
         #print("Error: %s" % str(e))
         return
 
-def drive(serial, dev, WHEEL_SPEEDS):
-    global CURRENT_ACTION, FORWARD, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
+def drive(serial, dev, SIDE_OF_ROBOT, WHEEL_SPEEDS):
+    global CURRENT_ACTION, FORWARD, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE, RIGHT_SIDE, LEFT_SIDE
     dev.claimInterface(0)
-    if serial == SER_FRONT_LEFT_1: # Front left, 1
-        dev.bulkWrite(0x02, generate_speed(WHEEL_SPEEDS[0]), timeout=1000)
-    elif serial == SER_BACK_LEFT_2: # Back left, 2
-        dev.bulkWrite(0x02, generate_speed(WHEEL_SPEEDS[1]), timeout=1000)
-    elif serial == SER_BACK_RIGHT_3: # Back right, 3
-        dev.bulkWrite(0x02, generate_speed(WHEEL_SPEEDS[2]), timeout=1000)
-    elif serial == SER_FRONT_RIGHT_4: # Front right, 4
-        dev.bulkWrite(0x02, generate_speed(WHEEL_SPEEDS[3]), timeout=1000)
+    if SIDE_OF_ROBOT == RIGHT_SIDE:
+        if serial == SER_BACK_RIGHT_3: # Back right, 3
+            dev.bulkWrite(0x02, generate_speed(-WHEEL_SPEEDS[0]), timeout=1000)
+        elif serial == SER_FRONT_RIGHT_4: # Front right, 4
+            dev.bulkWrite(0x02, generate_speed(-WHEEL_SPEEDS[1]), timeout=1000)
+        else:
+            # Don't address
+            pass
+    elif SIDE_OF_ROBOT == LEFT_SIDE:
+        if serial == SER_FRONT_LEFT_1: # Front left, 1
+            dev.bulkWrite(0x02, generate_speed(WHEEL_SPEEDS[0]), timeout=1000)
+        elif serial == SER_BACK_LEFT_2: # Back left, 2
+            dev.bulkWrite(0x02, generate_speed(WHEEL_SPEEDS[1]), timeout=1000)
+        else:
+            # Don't address
+            pass
     else:
         raise Exception("Unknown serial detected: %s" % serial)
     try:
@@ -144,7 +155,13 @@ def open_dev(usbcontext=None):
         if ((vid, pid) == (0x0483, 0xA30E)):
             motor = udev.open()
             motor.resetDevice()
-            all_wheel_motors.append((serial, motor))
+            if serial in [SER_FRONT_LEFT_1, SER_BACK_LEFT_2]:
+                all_left_wheel_motors.append((serial, motor))
+            elif serial in [SER_BACK_RIGHT_3, SER_FRONT_RIGHT_4]:
+                all_right_wheel_motors.append((serial, motor))
+            else:
+                #raise Exception("Unable to recognize attached Spark MAX motor controller with serial number: %s" % serial)
+                pass
             """
             if serial in [SER_LADDER_DIG]:
                 all_digging_motors.append((serial, motor))
@@ -163,11 +180,11 @@ def open_dev(usbcontext=None):
     #    raise Exception("Insufficient wheel motors detected")
 
 def main():
-    global CURRENT_ACTION, STOP, FORWARD
+    global CURRENT_ACTION, STOP, FORWARD, RIGHT_SIDE, LEFT_SIDE
     print("Osprey Robotics Demo Server")
     usbcontext = usb1.USBContext()
     open_dev(usbcontext)
-    print("%i motors detected\n" % len(all_digging_motors+all_ladder_position_motors+all_wheel_motors))
+    print("%i motors detected\n" % len(all_digging_motors+all_ladder_position_motors+all_right_wheel_motors+all_left_wheel_motors))
     #command = b""
     localIP     = "0.0.0.0"
     localPort   = 20222
@@ -185,13 +202,21 @@ def main():
         #address = bytesAddressPair[1]
         #clientIP  = "Client IP Address:{}".format(address)
         #print(list(message))
-        command = struct.unpack('>Bhhhh', message)
-        # 1: Drive
+        command = struct.unpack('>Bhh', message)
+        #print(command)
+        # 1: Drive right side
         if command[0] == 1:
-            WHEEL_SPEEDS = [round(float(speed*.8)/float(256),2) for speed in [command[1], command[2], command[3], command[4]]]
-            print("Sending wheel speeds: %s" % str(WHEEL_SPEEDS))
-            for motor in all_wheel_motors:
-                t=threading.Thread(target=move_forward, args=(motor[0], motor[1], WHEEL_SPEEDS))
+            WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1], command[2]]]
+            print("Sending right wheel speeds: %s" % str(WHEEL_SPEEDS))
+            for motor in all_right_wheel_motors:
+                t=threading.Thread(target=drive, args=(motor[0], motor[1], RIGHT_SIDE, WHEEL_SPEEDS))
+                t.start()
+        # 2: Drive left side
+        elif command[0] == 2:
+            WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1], command[2]]]
+            print("Sending left wheel speeds: %s" % str(WHEEL_SPEEDS))
+            for motor in all_left_wheel_motors:
+                t=threading.Thread(target=drive, args=(motor[0], motor[1], LEFT_SIDE, WHEEL_SPEEDS))
                 t.start()
         else:
             pass
@@ -199,7 +224,7 @@ def main():
            elif key == "k":
                if CURRENT_ACTION != STOP:
                    CURRENT_ACTION = STOP
-                   for motor in all_digging_motors+all_ladder_position_motors+all_wheel_motors:
+                   for motor in all_digging_motors+all_ladder_position_motors+all_right_wheel_motors+all_left_wheel_motors:
                        t=threading.Thread(target=kill, args=(motor[0],motor[1]))
                        t.start()
            elif key == "x":
