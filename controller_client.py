@@ -1,23 +1,25 @@
 # Osprey Robotics Controller Client
 
+# Imports
 import struct
 import threading
 import asyncio
 import socket
 
-current_speed = 0
+# Program global variables
+current_speed_right = 0
+current_speed_left = 0
 ADDRESS_WHEELS = 0x01
 COMMAND_WHEELS_STOP = 0
-COMMAND_WHEELS_FORWARD = 1
-COMMAND_WHEELS_BACKWARD = 2
-COMMAND_WHEELS_SPIN_RIGHT = 3
-COMMAND_WHEELS_SPIN_LEFT = 4
-current_action = COMMAND_WHEELS_FORWARD
+COMMAND_RIGHT_WHEELS = 1
+COMMAND_LEFT_WHEELS = 2
+current_action = COMMAND_WHEELS_STOP
 serverAddressPort = ("192.168.1.217", 20222)
 bufferSize = 5
-UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-
 INPUT_TYPE = 0
+new_commands = []
+
+# Controller global variables
 BUTTON = 1
 JOYSTICK = 2
 BUTTON_A = 0
@@ -25,40 +27,46 @@ BUTTON_B = 1
 BUTTON_X = 2
 BUTTON_Y = 3
 JOYSTICK_RT = 5
+JOYSTICK_RJ_UD = 4
 JOYSTICK_LT = 2
+JOYSTICK_LJ_UD = 1
 
+# Data streams
+UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 controller_device = open("/dev/input/js0","rb")
-new_commands = []
 
+# Reads commands from the controller
 def thread_function(name):
 	global controller_device, new_commands
 	while True:
 		command=list(controller_device.read(8))
 		new_commands = [command] + new_commands
 
-async def send_data():
-	global UDPClientSocket, serverAddressPort, current_action
-	print("Sending speed: %i" % current_speed)
-	if current_action == COMMAND_WHEELS_FORWARD:
-		UDPClientSocket.sendto(struct.pack('>Bhhhh', 0x01, current_speed, current_speed, current_speed, current_speed), serverAddressPort)
-	elif current_action == COMMAND_WHEELS_BACKWARD:
-		UDPClientSocket.sendto(struct.pack('>Bhhhh', 0x01, -current_speed, -current_speed, -current_speed, -current_speed), serverAddressPort)
-	elif current_action == COMMAND_WHEELS_SPIN_RIGHT:
-		UDPClientSocket.sendto(struct.pack('>Bhhhh', 0x01, current_speed, current_speed, -current_speed, -current_speed), serverAddressPort)
-	elif current_action == COMMAND_WHEELS_SPIN_LEFT:
-		UDPClientSocket.sendto(struct.pack('>Bhhhh', 0x01, -current_speed, -current_speed, current_speed, current_speed), serverAddressPort)
-	else:
+# Sends commands to the server
+async def send_commands():
+	global UDPClientSocket, serverAddressPort, current_action, current_speed_right, current_speed_left
+	if abs(current_speed_right) > 0:
+		print("Sending right speed: %i" % current_speed_right)
+		UDPClientSocket.sendto(struct.pack('>Bhh', COMMAND_RIGHT_WHEELS, current_speed_right, current_speed_right), serverAddressPort)
+	if abs(current_speed_left) > 0:
+		print("Sending left speed: %i" % current_speed_left)
+		UDPClientSocket.sendto(struct.pack('>Bhh', COMMAND_LEFT_WHEELS, current_speed_left, current_speed_left), serverAddressPort)
+	# TODO: Excavation
+	# TODO: Deposition
+	# TODO: Camera movement
+	if (current_speed_right == 0) and (current_speed_left == 0):
 		print("Unrecognized action")
 	return
 
-async def read_trigger(loop):
-	global current_speed, new_commands, current_action
+# Parse commands from controller
+async def parse_command(loop):
+	global current_speed_right, current_speed_left, new_commands, current_action
 	while True:
 		if len(new_commands) > 0:
 			command = new_commands.pop()
 		else:
-			if abs(current_speed) > 0:
-				await send_data()
+			if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0):
+				await send_commands()
 			await asyncio.sleep(.01)
 			continue
 		INPUT_TYPE = command[-2]
@@ -78,34 +86,60 @@ async def read_trigger(loop):
 			else:
 				print("OTHER BUTTON")
 		elif INPUT_TYPE == JOYSTICK:
+			# TODO: Excavation
+			"""
+			# Triggers
 			if (INPUT_ID == JOYSTICK_RT):
 				if command[5] >= 128:
 					current_speed = command[5]-128
-					print("JOYSTICK RT %s" % str(command[5]-128))
+					print("JOYSTICK RT %s" % str(current_speed))
 				elif command[5] <= 127:
 					current_speed = command[5]+128
-					print("JOYSTICK RT %s" % str(command[5]+128))
+					print("JOYSTICK RT %s" % str(current_speed))
 				else:
 					print("Unhandled joystick")
 				current_action = COMMAND_WHEELS_FORWARD
 			elif (INPUT_ID == JOYSTICK_LT):
 				if command[5] >= 128:
 					current_speed = command[5]-128
-					print("JOYSTICK LT %s" % str(command[5]-128))
+					print("JOYSTICK LT %s" % str(current_speed))
 				elif command[5] <= 127:
 					current_speed = command[5]+128
-					print("JOYSTICK LT %s" % str(command[5]+128))
+					print("JOYSTICK LT %s" % str(current_speed))
 				else:
 					print("Unhandled joystick")
 				current_action = COMMAND_WHEELS_BACKWARD
+			"""
+			# Joysticks
+			if (INPUT_ID == JOYSTICK_RJ_UD):
+				if command[5] <= 127:
+					current_speed_right = -command[5]
+					print("JOYSTICK RJ UD %s" % str(current_speed_right))
+				elif command[5] >= 128:
+					current_speed_right = (command[5]-255)*-1
+					print("JOYSTICK RJ UD %s" % str(current_speed_right))
+				else:
+					print("Unhandled joystick")
+				current_action = COMMAND_RIGHT_WHEELS
+			elif (INPUT_ID == JOYSTICK_LJ_UD):
+				if command[5] <= 127:
+					current_speed_left = -command[5]
+					print("JOYSTICK LJ UD %s" % str(current_speed_left))
+				elif command[5] >= 128:
+					current_speed_left = (command[5]-255)*-1
+					print("JOYSTICK LJ UD %s" % str(current_speed_left))
+				else:
+					print("Unhandled joystick")
+				current_action = COMMAND_LEFT_WHEELS
 			else:
-				print("OTHER JOYSTICK")
-			#print(command)
+				#print("OTHER JOYSTICK")
+				#print(command)
+				pass
 		else:
 			#print(command)
 			pass
-		if abs(current_speed) > 0:
-			await send_data()
+		if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0):
+			await send_commands()
 
 		# Schedule to run again in .01 seconds
 		await asyncio.sleep(.01)
@@ -116,7 +150,7 @@ if __name__ ==  '__main__':
 	read_thread.start()
 	loop = asyncio.get_event_loop()
 	try:
-		loop.run_until_complete(read_trigger(loop))
+		loop.run_until_complete(parse_command(loop))
 	finally:
 		loop.run_until_complete(loop.shutdown_asyncgens())  # Python 3.6 only
 		loop.close()
