@@ -1,4 +1,5 @@
 # Osprey Robotics Controller Client
+# TODO: Fix issue where joystick not going to zero when let go
 
 # Imports
 import struct
@@ -40,7 +41,9 @@ def thread_function(name):
 	global controller_device, new_commands
 	while True:
 		command=list(controller_device.read(8))
+		#print(command) # DEBUG
 		new_commands = [command] + new_commands
+		#print(new_commands) # DEBUG
 
 # Sends commands to the server
 async def send_commands():
@@ -86,6 +89,20 @@ async def parse_command(loop):
 			else:
 				print("OTHER BUTTON")
 		elif INPUT_TYPE == JOYSTICK:
+			# TODO: Camera control
+			"""
+	                if command[5]=='\x80': # D-Pad L/U
+	                        if command[7]=='\x06': # Left
+					(..)
+	                        elif command[7]=='\x07': # Up
+					(..)
+	                elif command[5]=='\x7F': # D-Pad R/D
+	                        if command[7]=='\x06': # Right
+					(..)
+	                        elif command[7]=='\x07': # Down
+					(..)
+
+			"""
 			# TODO: Excavation
 			"""
 			# Triggers
