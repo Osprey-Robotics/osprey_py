@@ -1,6 +1,5 @@
 import socket
 import binascii
-import curses
 import struct
 import time
 import threading
@@ -30,7 +29,6 @@ POSITIVE_HEX = "000000008400058208000000XXXXXXXX000000000af69afb"
 COMM_FORWARD = "00000000802c058208000000100000000000000095e92111"
 
 # Variables
-CURRENT_SPEED = 0.5 # 50% by default
 CURRENT_ACTION = 0
 LAST_DRIVE = 0
 all_wheel_motors = []
@@ -165,7 +163,7 @@ def open_dev(usbcontext=None):
     #    raise Exception("Insufficient wheel motors detected")
 
 def main():
-    global CURRENT_SPEED, CURRENT_ACTION, STOP, FORWARD
+    global CURRENT_ACTION, STOP, FORWARD
     print("Osprey Robotics Demo Server")
     usbcontext = usb1.USBContext()
     open_dev(usbcontext)
@@ -211,24 +209,10 @@ def main():
                        t=threading.Thread(target=dig_bucket_ladder, args=(motor[0],motor[1]))
                        t.start()
                    time.sleep(MOTOR_SLEEP)
-           elif key == "+":
-               if ("%.2f" % CURRENT_SPEED) == ("%.2f" % 1.0):
-                   pass
-               else:
-                   CURRENT_SPEED += .05
-           elif key == "-":
-               if ("%.2f" % CURRENT_SPEED) == ("%.2f" % -1.0):
-                   pass
-               else:
-                   CURRENT_SPEED -= .05
-           else:
-               pass
         except Exception as e:
            # No input
            CURRENT_ACTION = STOP
            pass
-
-curses.wrapper(main)
 """
 
 main()
