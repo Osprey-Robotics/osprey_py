@@ -68,77 +68,17 @@ def kill(serial, dev):
         #print("Error: %s" % str(e))
         return
 
-def move_forward(serial, dev):
+def drive(serial, dev, WHEEL_SPEEDS):
     global CURRENT_ACTION, FORWARD, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
     dev.claimInterface(0)
     if serial == SER_FRONT_LEFT_1: # Front left, 1
-        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(WHEEL_SPEEDS[0]), timeout=1000)
     elif serial == SER_BACK_LEFT_2: # Back left, 2
-        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(WHEEL_SPEEDS[1]), timeout=1000)
     elif serial == SER_BACK_RIGHT_3: # Back right, 3
-        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(WHEEL_SPEEDS[2]), timeout=1000)
     elif serial == SER_FRONT_RIGHT_4: # Front right, 4
-        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
-    else:
-        raise Exception("Unknown serial detected: %s" % serial)
-    try:
-        dev.bulkWrite(0x02, binascii.a2b_hex(COMM_FORWARD))
-        LAST_DRIVE = time.time()
-    except Exception as e:
-        #print("Error: %s" % str(e))
-        return
-
-def move_backward(serial, dev):
-    global CURRENT_ACTION, BACKWARD, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
-    dev.claimInterface(0)
-    if serial == SER_FRONT_LEFT_1: # Front left, 1
-        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
-    elif serial == SER_BACK_LEFT_2: # Back left, 2
-        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
-    elif serial == SER_BACK_RIGHT_3: # Back right, 3
-        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
-    elif serial == SER_FRONT_RIGHT_4: # Front right, 4
-        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
-    else:
-        raise Exception("Unknown serial detected: %s" % serial)
-    try:
-        dev.bulkWrite(0x02, binascii.a2b_hex(COMM_FORWARD))
-        LAST_DRIVE = time.time()
-    except Exception as e:
-        #print("Error: %s" % str(e))
-        return
-
-def spin_left(serial, dev):
-    global CURRENT_ACTION, LEFT, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
-    dev.claimInterface(0)
-    if serial == SER_FRONT_LEFT_1: # Front left, 1
-        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
-    elif serial == SER_BACK_LEFT_2: # Back left, 2
-        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
-    elif serial == SER_BACK_RIGHT_3: # Back right, 3
-        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
-    elif serial == SER_FRONT_RIGHT_4: # Front right, 4
-        dev.bulkWrite(0x02, generate_speed(-CURRENT_SPEED), timeout=1000)
-    else:
-        raise Exception("Unknown serial detected: %s" % serial)
-    try:
-        dev.bulkWrite(0x02, binascii.a2b_hex(COMM_FORWARD))
-        LAST_DRIVE = time.time()
-    except Exception as e:
-        #print("Error: %s" % str(e))
-        return
-
-def spin_right(serial, dev):
-    global CURRENT_ACTION, RIGHT, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
-    dev.claimInterface(0)
-    if serial == SER_FRONT_LEFT_1: # Front left, 1
-        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
-    elif serial == SER_BACK_LEFT_2: # Back left, 2
-        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
-    elif serial == SER_BACK_RIGHT_3:  # Back right, 3
-        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
-    elif serial == SER_FRONT_RIGHT_4: # Front right, 4
-        dev.bulkWrite(0x02, generate_speed(CURRENT_SPEED), timeout=1000)
+        dev.bulkWrite(0x02, generate_speed(WHEEL_SPEEDS[3]), timeout=1000)
     else:
         raise Exception("Unknown serial detected: %s" % serial)
     try:
@@ -221,11 +161,8 @@ def open_dev(usbcontext=None):
     #    raise Exception("Insufficient digging motors detected")
     #if len(all_ladder_position_motors) < 1:
     #    raise Exception("Insufficient ladder position motors detected")
-    if len(all_wheel_motors) < 4:
-        raise Exception("Insufficient wheel motors detected")
-
-def move(win, key):
-    return
+    #if len(all_wheel_motors) < 4:
+    #    raise Exception("Insufficient wheel motors detected")
 
 def main():
     global CURRENT_SPEED, CURRENT_ACTION, STOP, FORWARD
@@ -236,7 +173,7 @@ def main():
     #command = b""
     localIP     = "0.0.0.0"
     localPort   = 20222
-    bufferSize  = 5 #1024
+    bufferSize  = 9 #1024
     # Create a datagram socket
     UDPServerSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
     # Bind to address and ip
@@ -249,58 +186,18 @@ def main():
         message = bytesAddressPair[0]
         #address = bytesAddressPair[1]
         #clientIP  = "Client IP Address:{}".format(address)
-        #print(clientMsg.encode("ascii"))
-        #print(type(clientMsg.encode("ascii")))
-        #print(clientMsg.encode("ascii"))
-        #print(b"hello" in clientMsg.encode("ascii"))
         #print(list(message))
-        if message.startswith(b"sp"):
-            speed = int(message[2:])
-            CURRENT_SPEED = round(float(speed*.8)/float(256),2)
-            print("Sending speed: %i" % speed)
-            #if CURRENT_ACTION == STOP:
-            CURRENT_ACTION = FORWARD
+        command = struct.unpack('>Bhhhh', message)
+        # 1: Drive
+        if command[0] == 1:
+            WHEEL_SPEEDS = [round(float(speed*.8)/float(256),2) for speed in [command[1], command[2], command[3], command[4]]]
+            print("Sending wheel speeds: %s" % str(WHEEL_SPEEDS))
             for motor in all_wheel_motors:
-                t=threading.Thread(target=move_forward, args=(motor[0],motor[1]))
+                t=threading.Thread(target=move_forward, args=(motor[0], motor[1], WHEEL_SPEEDS))
                 t.start()
-            #time.sleep(MOTOR_SLEEP)
-        elif message.startswith(b"bk"):
-            speed = int(message[2:])
-            CURRENT_SPEED = round(float(speed*.8)/float(256),2)
-            print("Sending speed: %i" % speed)
-            #if CURRENT_ACTION == STOP:
-            CURRENT_ACTION = BACKWARD
-            for motor in all_wheel_motors:
-                t=threading.Thread(target=move_backward, args=(motor[0],motor[1]))
-                t.start()
-            #time.sleep(MOTOR_SLEEP)
         else:
             pass
     """
-        try:
-           if key == "q":
-              break
-           elif key == "a":
-               if CURRENT_ACTION == STOP:
-                   CURRENT_ACTION = LEFT
-                   for motor in all_wheel_motors:
-                       t=threading.Thread(target=spin_left, args=(motor[0],motor[1]))
-                       t.start()
-                   time.sleep(MOTOR_SLEEP)
-           elif key == "s":
-               if CURRENT_ACTION == STOP:
-                   CURRENT_ACTION = BACKWARD
-                   for motor in all_wheel_motors:
-                       t=threading.Thread(target=move_backward, args=(motor[0],motor[1]))
-                       t.start()
-                   time.sleep(MOTOR_SLEEP)
-           elif key == "d":
-               if CURRENT_ACTION == STOP:
-                   CURRENT_ACTION = RIGHT
-                   for motor in all_wheel_motors:
-                       t=threading.Thread(target=spin_right, args=(motor[0],motor[1]))
-                       t.start()
-                   time.sleep(MOTOR_SLEEP)
            elif key == "k":
                if CURRENT_ACTION != STOP:
                    CURRENT_ACTION = STOP
