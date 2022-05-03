@@ -46,7 +46,34 @@ def should_ramp_up_motors(current_time, speed):
         return False
 
 def generate_speed(speed):
+    global RAMP_PHASE
+    is_positive = (speed >= 0)
+    speed = abs(speed)
+    current_time = time.time()
+    calculated_speed = 0
+    if should_ramp_up_motors(current_time, speed):
+        RAMP_PHASE = 0
+        if is_positive:
+            calculated_speed = 0.1 # Ramp up should begin at 10%
+        else:
+            calculated_speed = -0.1 # Ramp up should begin at -10%
+    elif (RAMP_PHASE < 2.6) and ((current_time-LAST_DRIVE) <= LAST_DRIVE_WAIT): # Should avoid any floating point issues
+        RAMP_PHASE += .1
+        if is_positive:
+            calculated_speed = round((.1*(math.e**((math.log(((speed)/.1))/2.5)*RAMP_PHASE))),2)
+        else:
+            calculated_speed = -(round((.1*(math.e**((math.log(((speed)/.1))/2.5)*RAMP_PHASE))),2))
+    else:
+        if is_positive:
+            calculated_speed = speed
+        else:
+            calculated_speed = -speed
+    return binascii.a2b_hex(POSITIVE_HEX.replace("XXXXXXXX", str(binascii.hexlify(struct.pack('<f', calculated_speed)), "ascii")))
+
+"""
+def generate_speed(speed):
     return binascii.a2b_hex(POSITIVE_HEX.replace("XXXXXXXX", str(binascii.hexlify(struct.pack('<f', speed)), "ascii")))
+"""
 
 def kill(serial, dev):
     global CURRENT_ACTION, STOP, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
