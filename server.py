@@ -15,6 +15,14 @@ BACKWARD = 4
 UP = 5
 DOWN = 6
 DIG = 7
+BUTTON_A = 0
+BUTTON_B = 1
+BUTTON_X = 2
+BUTTON_Y = 3
+BUTTON_BACK = 6
+BUTTON_START = 7
+BUTTON_LT_CLICK=9
+BUTTON_RT_CLICK=10
 MOTOR_SLEEP = 0.05 #0.4
 RIGHT_SIDE = 1
 LEFT_SIDE = 2
@@ -70,11 +78,6 @@ def generate_speed(speed):
             calculated_speed = -speed
     return binascii.a2b_hex(POSITIVE_HEX.replace("XXXXXXXX", str(binascii.hexlify(struct.pack('<f', calculated_speed)), "ascii")))
 
-"""
-def generate_speed(speed):
-    return binascii.a2b_hex(POSITIVE_HEX.replace("XXXXXXXX", str(binascii.hexlify(struct.pack('<f', speed)), "ascii")))
-"""
-
 def kill(serial, dev):
     global CURRENT_ACTION, STOP, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
     dev.claimInterface(0)
@@ -103,7 +106,7 @@ def drive(serial, dev, SIDE_OF_ROBOT, WHEEL_SPEEDS):
         if serial == SER_BACK_RIGHT_3: # Back right, 3
             dev.bulkWrite(0x02, generate_speed(-WHEEL_SPEEDS[0]), timeout=1000)
         elif serial == SER_FRONT_RIGHT_4: # Front right, 4
-            dev.bulkWrite(0x02, generate_speed(-WHEEL_SPEEDS[1]), timeout=1000)
+            dev.bulkWrite(0x02, generate_speed(-WHEEL_SPEEDS[0]), timeout=1000)
         else:
             # Don't address
             pass
@@ -111,7 +114,7 @@ def drive(serial, dev, SIDE_OF_ROBOT, WHEEL_SPEEDS):
         if serial == SER_FRONT_LEFT_1: # Front left, 1
             dev.bulkWrite(0x02, generate_speed(WHEEL_SPEEDS[0]), timeout=1000)
         elif serial == SER_BACK_LEFT_2: # Back left, 2
-            dev.bulkWrite(0x02, generate_speed(WHEEL_SPEEDS[1]), timeout=1000)
+            dev.bulkWrite(0x02, generate_speed(WHEEL_SPEEDS[0]), timeout=1000)
         else:
             # Don't address
             pass
@@ -207,15 +210,15 @@ def open_dev(usbcontext=None):
     #    raise Exception("Insufficient wheel motors detected")
 
 def main():
-    global CURRENT_ACTION, STOP, FORWARD, RIGHT_SIDE, LEFT_SIDE
-    print("Osprey Robotics Demo Server")
+    global CURRENT_ACTION, STOP, FORWARD, RIGHT_SIDE, LEFT_SIDE, BUTTON_START, all_digging_motors, all_ladder_position_motors, all_right_wheel_motors, all_left_wheel_motors
+    print("Osprey Robotics Control Server")
     usbcontext = usb1.USBContext()
     open_dev(usbcontext)
     print("%i motors detected\n" % len(all_digging_motors+all_ladder_position_motors+all_right_wheel_motors+all_left_wheel_motors))
     #command = b""
     localIP     = "0.0.0.0"
     localPort   = 20222
-    bufferSize  = 9 #1024
+    bufferSize  = 7 #1024
     # Create a datagram socket
     UDPServerSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
     # Bind to address and ip
@@ -229,22 +232,43 @@ def main():
         #address = bytesAddressPair[1]
         #clientIP  = "Client IP Address:{}".format(address)
         #print(list(message))
-        command = struct.unpack('>Bhh', message)
+        command = struct.unpack('>Bh', message)
         #print(command)
+        # 0: Brake
         # 1: Drive right side
         if command[0] == 1:
-            WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1], command[2]]]
+            #WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1], command[2]]]
+            WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1]]]
             print("Sending right wheel speeds: %s" % str(WHEEL_SPEEDS))
             for motor in all_right_wheel_motors:
                 t=threading.Thread(target=drive, args=(motor[0], motor[1], RIGHT_SIDE, WHEEL_SPEEDS))
                 t.start()
         # 2: Drive left side
         elif command[0] == 2:
-            WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1], command[2]]]
+            #WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1], command[2]]]
+            WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1]]]
             print("Sending left wheel speeds: %s" % str(WHEEL_SPEEDS))
             for motor in all_left_wheel_motors:
                 t=threading.Thread(target=drive, args=(motor[0], motor[1], LEFT_SIDE, WHEEL_SPEEDS))
                 t.start()
+        # 3: Button press event
+        elif command[0] == 3:
+            #WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1], command[2]]]
+            if command[1] == BUTTON_START:
+                print("Motor reset requested")
+                for motor in all_left_wheel_motors+all_right_wheel_motors:
+                    try:
+                        motor[1].close()
+                    except Exception as e:
+                        print("Could not cleanly close motor controller with serial number %s: %s" % (motor[0], e))
+                all_left_wheel_motors=[]
+                all_right_wheel_motors=[]
+                usbcontext = usb1.USBContext()
+                open_dev(usbcontext)
+                print("Motor reset complete")
+            else:
+                #print("Received button event: %i" % command[1])
+                pass
         else:
             pass
     """
