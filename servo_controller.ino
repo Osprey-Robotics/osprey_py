@@ -33,7 +33,7 @@ void loop() {
    pos_x = pos_x + 1 ;
     }
     // left right servo
-      myservo1.write(pos);
+      myservo1.write(pos_x);
    }
  }
  // 3 is down, 4 is up
@@ -47,7 +47,7 @@ void loop() {
     }
   }
   // up down servo
-    myservo2.write(pos);
+    myservo2.write(pos_y);
    }            
 
   delay(10);                       // waits 10ms for the servo to reach the position
