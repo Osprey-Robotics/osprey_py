@@ -19,18 +19,18 @@ void setup() {
 }
 
 void loop() {
-  
-    int pos_x = 0;
-    int pos_y = 0;
+    int move_cam = 1; // increment or decrement the position by 1
+    int pos_x = 0; // x axis movement
+    int pos_y = 0; // y axis movement
 
 // 1 is left, 2 is right
  if ((readByte = 1) || (readByte = 2)) {
   for (pos_x = 90; pos_x <= 180; pos += 1) { // goes from 0 degrees to 180 degrees 
     if (readByte = 1) {
-   pos_x = pos_x - 1 ;
+   pos_x = pos_x - move_cam ;
     }
     else if (readByte = 2) {
-   pos_x = pos_x + 1 ;
+   pos_x = pos_x + move_cam ;
     }
     // left right servo
       myservo1.write(pos_x);
@@ -40,10 +40,10 @@ void loop() {
    else if((readByte = 3) || (readByte = 4)) {
   for (pos_y = 90; pos_y <= 180; pos+= 1) {
     if (readByte = 3){
-    pos_y = pos_y - 1;
+    pos_y = pos_y - move_cam;
     }
     else if (readByte = 4){
-    pos_y = pos_y + 1;
+    pos_y = pos_y + move_cam;
     }
   }
   // up down servo
