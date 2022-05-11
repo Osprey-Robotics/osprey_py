@@ -8,8 +8,7 @@ int readByte = 0; // initialize joule input
 int move_cam = 10; // increment or decrement the position by 1
 int pos_x = 0; // x axis movement
 int pos_y = 0; // y axis movement
-int x = 0;
-int getVal = 0;
+int getVal = 0; // 
 
 void setup() {
   Serial.begin(115200); // open serial port 115200 bps
@@ -25,9 +24,9 @@ void setup() {
 }
 
 void loop() {
-  Serial.println("Hello from arduino");
 
   if (Serial.available() > 0) {
+    Serial.println("Hello from arduino");
 
     if (getVal = 1) {
       pos_x = pos_x - move_cam;
@@ -43,7 +42,6 @@ void loop() {
       myservo2.write(pos_y);
     }
   }
-
 
   delay(10); // waits 10ms for the servo to reach the position
 }
