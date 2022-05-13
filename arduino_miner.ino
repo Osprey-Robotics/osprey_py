@@ -129,13 +129,11 @@ void loop() {
             myservo2.write(current_message.Degrees);
             delay(10); // Waits 10ms for the servo to reach the position
         } else if (current_message.FunctionCode == 3) {
-            Forward_Actuator();
-            delay(1000); // Waits 1000ms for the actuator to reach the position
-            digitalWrite(relay_4, actuatorOff); // stops actuator when button released
+            digitalWrite(relay_4, actuatorOff); // Stops actuator when button released
         } else if (current_message.FunctionCode == 4) {
+            Forward_Actuator();
+        } else if (current_message.FunctionCode == 5) {
             Reverse_Actuator();
-            delay(1000); // Waits 1000ms for the actuator to reach the position
-            digitalWrite(relay_4, actuatorOff);
         }
     }
 }
@@ -164,12 +162,8 @@ void Forward_Actuator() {
         Change_Relay_State();
         digitalWrite(relay_1, relay1And2State);
         digitalWrite(relay_2, relay1And2State);
-    } else {
-        //doesn't need to write to relay 1 and 2 because they're already set to forward "HIGH"
-        digitalWrite(relay_4, actuatorOn);
     }
-    //delay(DEBOUNCE_TIME);
-    //digitalWrite(relay_4, actuatorOff); // stops actuator when button released
+    digitalWrite(relay_4, actuatorOn);
 }
 
 /*************************************************************************************
@@ -183,12 +177,8 @@ void Reverse_Actuator() {
         Change_Relay_State();
         digitalWrite(relay_1, relay1And2State);
         digitalWrite(relay_2, relay1And2State);
-    } else {
-        //doesn't need to write to relay 1 and 2 because they're already set to reverse "LOW"
-        digitalWrite(relay_4, actuatorOn);
     }
-    //delay(DEBOUNCE_TIME);
-    //digitalWrite(relay_4, actuatorOff);
+    digitalWrite(relay_4, actuatorOn);
 }
 
 /***************************************************************************************
