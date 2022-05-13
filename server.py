@@ -1,3 +1,4 @@
+import serial as ser
 import socket
 import binascii
 import struct
@@ -15,14 +16,22 @@ BACKWARD = 4
 UP = 5
 DOWN = 6
 DIG = 7
-BUTTON_A = 0
-BUTTON_B = 1
-BUTTON_X = 2
-BUTTON_Y = 3
-BUTTON_BACK = 6
-BUTTON_START = 7
-BUTTON_LT_CLICK=9
-BUTTON_RT_CLICK=10
+BUTTON_A_ON = 0
+BUTTON_A_OFF = 10
+BUTTON_B_ON = 1
+BUTTON_B_OFF = 11
+BUTTON_X_ON = 2
+BUTTON_X_OFF = 12
+BUTTON_Y_ON = 3
+BUTTON_Y_OFF = 13
+BUTTON_BACK_ON = 6
+BUTTON_BACK_OFF = 16
+BUTTON_START_ON = 7
+BUTTON_START_OFF = 17
+BUTTON_LT_CLICK_ON=9
+BUTTON_LT_CLICK_OFF=19
+BUTTON_RT_CLICK_ON=10
+BUTTON_RT_CLICK_OFF=20
 MOTOR_SLEEP = 0.05 #0.4
 RIGHT_SIDE = 1
 LEFT_SIDE = 2
@@ -45,6 +54,7 @@ all_right_wheel_motors = []
 all_left_wheel_motors = []
 all_ladder_position_motors = []
 all_digging_motors = []
+arduino = None
 
 def should_ramp_up_motors(current_time, speed):
     # Only ramp up if speed is greater than 20% and we haven't already ramped up
@@ -169,7 +179,20 @@ def dig_bucket_ladder(serial, dev):
         #print("Error: %s" % str(e))
         return
 
+def write_arduino(num, deg):
+    global arduino
+    arduino.write(struct.pack('BB', num, deg))
+    time.sleep(0.05)
+    return
+
 def open_dev(usbcontext=None):
+    global arduino
+    # TODO: Improve this
+    try:
+        arduino = ser.Serial('/dev/ttyACM0', baudrate=9600, timeout=.1)
+    except Exception:
+        arduino = ser.Serial('/dev/ttyACM1', baudrate=9600, timeout=.1)
+
     if usbcontext is None:
         usbcontext = usb1.USBContext()
 
@@ -206,11 +229,11 @@ def open_dev(usbcontext=None):
     #    raise Exception("Insufficient digging motors detected")
     #if len(all_ladder_position_motors) < 1:
     #    raise Exception("Insufficient ladder position motors detected")
-    #if len(all_wheel_motors) < 4:
+    #if len(all_left_wheel_motors+all_right_wheel_motors) < 4:
     #    raise Exception("Insufficient wheel motors detected")
 
 def main():
-    global CURRENT_ACTION, STOP, FORWARD, RIGHT_SIDE, LEFT_SIDE, BUTTON_START, all_digging_motors, all_ladder_position_motors, all_right_wheel_motors, all_left_wheel_motors
+    global CURRENT_ACTION, STOP, FORWARD, RIGHT_SIDE, LEFT_SIDE, BUTTON_START_ON, all_digging_motors, all_ladder_position_motors, all_right_wheel_motors, all_left_wheel_motors, arduino
     print("Osprey Robotics Control Server")
     usbcontext = usb1.USBContext()
     open_dev(usbcontext)
@@ -233,7 +256,7 @@ def main():
         #clientIP  = "Client IP Address:{}".format(address)
         #print(list(message))
         command = struct.unpack('>Bh', message)
-        #print(command)
+        print(command) # DEBUG
         # 0: Brake
         # 1: Drive right side
         if command[0] == 1:
@@ -254,7 +277,7 @@ def main():
         # 3: Button press event
         elif command[0] == 3:
             #WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1], command[2]]]
-            if command[1] == BUTTON_START:
+            if command[1] == BUTTON_START_ON:
                 print("Motor reset requested")
                 for motor in all_left_wheel_motors+all_right_wheel_motors:
                     try:
@@ -266,6 +289,17 @@ def main():
                 usbcontext = usb1.USBContext()
                 open_dev(usbcontext)
                 print("Motor reset complete")
+            elif command[1] == BUTTON_Y_ON:
+                # Linear actuator forward
+                print("Actuator forward")
+                write_arduino(4, 0)
+            elif command[1] == BUTTON_X_ON:
+                # Linear actuator reverse
+                print("Actuator reverse")
+                write_arduino(5, 0)
+            elif (command[1] == BUTTON_X_OFF) or (command[1] == BUTTON_Y_OFF):
+                print("Actuator stop")
+                write_arduino(3, 0)
             else:
                 #print("Received button event: %i" % command[1])
                 pass
