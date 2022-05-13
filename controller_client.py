@@ -31,14 +31,22 @@ bonus_speed_max=57
 # Controller global variables
 BUTTON = 1
 JOYSTICK = 2
-BUTTON_A = 0
-BUTTON_B = 1
-BUTTON_X = 2
-BUTTON_Y = 3
-BUTTON_BACK = 6
-BUTTON_START = 7
-BUTTON_LT_CLICK=9
-BUTTON_RT_CLICK=10
+BUTTON_A_ON = 0
+BUTTON_A_OFF = 10
+BUTTON_B_ON = 1
+BUTTON_B_OFF = 11
+BUTTON_X_ON = 2
+BUTTON_X_OFF = 12
+BUTTON_Y_ON = 3
+BUTTON_Y_OFF = 13
+BUTTON_BACK_ON = 6
+BUTTON_BACK_OFF = 16
+BUTTON_START_ON = 7
+BUTTON_START_OFF = 17
+BUTTON_LT_CLICK_ON=9
+BUTTON_LT_CLICK_OFF=19
+BUTTON_RT_CLICK_ON=10
+BUTTON_RT_CLICK_OFF=20
 JOYSTICK_RT = 5
 JOYSTICK_RJ_UD = 4
 JOYSTICK_LT = 2
@@ -92,15 +100,31 @@ def thread_function(name):
 # Sends commands to the server
 async def send_commands(button=None):
         global UDPClientSocket, serverAddressPort, current_speed_right, current_speed_left, bonus_speed
-        if button == BUTTON_START:
+        if button == BUTTON_START_ON:
                 print("Requesting motor reset")
-                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_START), serverAddressPort)
+                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_START_ON), serverAddressPort)
                 wait_seconds = 5
                 while wait_seconds >= 0:
                         print("\rPlease wait (%s)" % (str(wait_seconds).zfill(2)), end='')
                         time.sleep(1)
                         wait_seconds -= 1
                 print("\rMotors should be reset, resume driving when ready")
+                return
+        if button == BUTTON_X_ON:
+                print("Sending linear actuator reverse start")
+                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_X_ON), serverAddressPort)
+                return
+        if button == BUTTON_X_OFF:
+                print("Sending linear actuator reverse stop")
+                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_X_OFF), serverAddressPort)
+                return
+        if button == BUTTON_Y_ON:
+                print("Sending linear actuator forward start")
+                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_Y_ON), serverAddressPort)
+                return
+        if button == BUTTON_Y_OFF:
+                print("Sending linear actuator forward stop")
+                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_Y_OFF), serverAddressPort)
                 return
         if abs(current_speed_right) > 0:
                 effective_bonus_speed = bonus_speed if ((current_speed_right>0) == True) else -bonus_speed
@@ -140,21 +164,37 @@ async def parse_command(loop):
                 INPUT_ID = command[-1]
                 if INPUT_TYPE == BUTTON:
                         button_pressed = command[-4] == 1
-                        if (INPUT_ID == BUTTON_A) and button_pressed:
-                                print("\nA BUTTON")
-                        elif (INPUT_ID == BUTTON_B) and button_pressed:
-                                print("\nB BUTTON")
-                        elif (INPUT_ID == BUTTON_X) and button_pressed:
-                                print("\nX BUTTON")
-                        elif (INPUT_ID == BUTTON_Y) and button_pressed:
-                                print("\nY BUTTON")
-                        elif (INPUT_ID == BUTTON_START) and button_pressed:
+                        if (INPUT_ID == BUTTON_A_ON):
+                                if button_pressed:
+                                        print("\nA BUTTON PRESSED")
+                                else:
+                                        print("\nA BUTTON RELEASED")
+                        elif (INPUT_ID == BUTTON_B_ON):
+                                if button_pressed:
+                                        print("\nB BUTTON PRESSED")
+                                else:
+                                        print("\nB BUTTON RELEASED")
+                        elif (INPUT_ID == BUTTON_X_ON):
+                                if button_pressed:
+                                        #print("\nX BUTTON PRESSED")
+                                        await send_commands(BUTTON_X_ON)
+                                else:
+                                        #print("\nX BUTTON RELEASED")
+                                        await send_commands(BUTTON_X_OFF)
+                        elif (INPUT_ID == BUTTON_Y_ON):
+                                if button_pressed:
+                                        #print("\nY BUTTON PRESSED")
+                                        await send_commands(BUTTON_Y_ON)
+                                else:
+                                        #print("\nY BUTTON RELEASED")
+                                        await send_commands(BUTTON_Y_OFF)
+                        elif (INPUT_ID == BUTTON_START_ON) and button_pressed:
                                 #print("\nSTART BUTTON")
-                                await send_commands(BUTTON_START)
-                        elif (INPUT_ID == BUTTON_BACK) and button_pressed:
+                                await send_commands(BUTTON_START_ON)
+                        elif (INPUT_ID == BUTTON_BACK_ON) and button_pressed:
                                 print("\nBACK BUTTON")
-                        elif not button_pressed:
-                                pass
+                        #elif not button_pressed:
+                        #        pass
                         else:
                                 print("\nOTHER BUTTON")
                 elif INPUT_TYPE == JOYSTICK:
