@@ -17,6 +17,8 @@ COMMAND_WHEELS_STOP = 0
 COMMAND_RIGHT_WHEELS = 1
 COMMAND_LEFT_WHEELS = 2
 COMMAND_BUTTON_PRESS = 3
+COMMAND_LR_SERVO = 4
+COMMAND_UD_SERVO = 5
 serverAddressPort = ("192.168.1.217", 20222)
 INPUT_TYPE = 0
 new_commands = []
@@ -51,10 +53,17 @@ JOYSTICK_RT = 5
 JOYSTICK_RJ_UD = 4
 JOYSTICK_LT = 2
 JOYSTICK_LJ_UD = 1
+# TODO CELINE: Add DPAD global variables
+DPAD_LR = 128
+DPAD_UD = 127
+DPAD_LEFT = 8
+DPAD_RIGHT = 14 
+DPAD_UP = 15
+DPAD_DOWN = 18
 
 # Data streams
 UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-controller_device = open("/dev/input/js0","rb")
+controller_device = open("/dev/input/js2","rb")
 
 def update_speed(wheel_side, new_speed):
         global current_speed_right, current_speed_left
@@ -126,6 +135,28 @@ async def send_commands(button=None):
                 print("Sending linear actuator forward stop")
                 UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_Y_OFF), serverAddressPort)
                 return
+        # TODO CELINE: Add move camera left/right up/down
+        # send the dpad commands
+        if button == DPAD_LEFT:
+            print("\ndpad left")
+            degree = -5
+            UDPClientSocket.sendto(struct.pack('BB', COMMAND_LR_SERVO, degree), serverAddressPort)
+            return
+        if button == DPAD_RIGHT:
+            print("\ndpad right")
+            degree = 5
+            UDPClientSocket.sendto(struct.pack('BB', COMMAND_LR_SERVO, degree), serverAddressPort)
+            return
+        if button == DPAD_UP:
+            print("\ndpad up")
+            degree = 5
+            UDPClientSocket.sendto(struct.pack('BB', COMMAND_UD_SERVO, degree), serverAddressPort)
+            return
+        if button == DPAD_DOWN:
+            print("\ndpad down")
+            degree = -5
+            UDPClientSocket.sendto(struct.pack('BB', COMMAND_UD_SERVO, degree), serverAddressPort)
+            return
         if abs(current_speed_right) > 0:
                 effective_bonus_speed = bonus_speed if ((current_speed_right>0) == True) else -bonus_speed
                 speed_sign = "+" if ((current_speed_right>0) == True) else "-"
@@ -198,24 +229,31 @@ async def parse_command(loop):
                         else:
                                 print("\nOTHER BUTTON")
                 elif INPUT_TYPE == JOYSTICK:
-                        # TODO: Camera control
-                        """
-                        if command[5]=='\x80': # D-Pad L/U
-                                if command[7]=='\x06': # Left
-                                        (..)
-                                elif command[7]=='\x07': # Up
-                                        (..)
-                        elif command[5]=='\x7F': # D-Pad R/D
-                                if command[7]=='\x06': # Right
-                                        (..)
-                                elif command[7]=='\x07': # Down
-                                        (..)
-
-                        """
+                        print("Joystick detected")
+                        # TODO CELINE: Camera control
+                        if command[5] == DPAD_LR:  # D-Pad L/U
+                                print("Left right joystick detected")
+                                if command[7] == DPAD_LEFT:  # Left
+                                    print("\n left dpad")
+                                    await send_commands(DPAD_LEFT)
+                                elif command[7] == DPAD_UP:  # Up
+                                    print("\n up dpad")
+                                    await send_commands(DPAD_UP)
+                                else:
+                                    pass
+                        elif command[5] == DPAD_UD: # D-Pad R/D
+                                print("Up down joystick detected")
+                                if command[7] == DPAD_RIGHT:  # Right
+                                    print("\n right dpad")
+                                    await send_commands(DPAD_RIGHT)
+                                elif command[7] == DPAD_DOWN:  # Down
+                                    print("\n down dpad")
+                                    await send_commands(DPAD_DOWN)
+                                else:
+                                    pass
                         # TODO: Excavation
-                        """
                         # Triggers
-                        if (INPUT_ID == JOYSTICK_RT):
+                        elif (INPUT_ID == JOYSTICK_RT):
                                 if command[5] >= 128:
                                         current_speed = command[5]-128
                                         print("JOYSTICK RT %s" % str(current_speed))
@@ -233,9 +271,8 @@ async def parse_command(loop):
                                         print("JOYSTICK LT %s" % str(current_speed))
                                 else:
                                         print("Unhandled joystick")
-                        """
                         # Joysticks
-                        if (INPUT_ID == JOYSTICK_RJ_UD) or (INPUT_ID == JOYSTICK_LJ_UD):
+                        elif (INPUT_ID == JOYSTICK_RJ_UD) or (INPUT_ID == JOYSTICK_LJ_UD):
                                 new_speed = None
                                 if command[5] <= 127:
                                         new_speed = -command[5]
@@ -253,8 +290,8 @@ async def parse_command(loop):
                                         else:
                                                 print("Unhandled joystick")
                         else:
-                                #print("OTHER JOYSTICK")
-                                #print(command)
+                                print("OTHER JOYSTICK")
+                                print(command)
                                 pass
                 else:
                         #print(command)
