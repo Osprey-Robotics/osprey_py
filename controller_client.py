@@ -34,36 +34,45 @@ bonus_speed_max=57
 BUTTON = 1
 JOYSTICK = 2
 BUTTON_A_ON = 0
-BUTTON_A_OFF = 10
+BUTTON_A_OFF = 100
 BUTTON_B_ON = 1
-BUTTON_B_OFF = 11
+BUTTON_B_OFF = 101
 BUTTON_X_ON = 2
-BUTTON_X_OFF = 12
+BUTTON_X_OFF = 102
 BUTTON_Y_ON = 3
-BUTTON_Y_OFF = 13
+BUTTON_Y_OFF = 103
 BUTTON_BACK_ON = 6
-BUTTON_BACK_OFF = 16
+BUTTON_BACK_OFF = 106
 BUTTON_START_ON = 7
-BUTTON_START_OFF = 17
-BUTTON_LT_CLICK_ON=9
-BUTTON_LT_CLICK_OFF=19
-BUTTON_RT_CLICK_ON=10
-BUTTON_RT_CLICK_OFF=20
+BUTTON_START_OFF = 107
+BUTTON_LT_CLICK_ON = 9
+BUTTON_LT_CLICK_OFF = 109
+BUTTON_RT_CLICK_ON = 10
+BUTTON_RT_CLICK_OFF = 110
 JOYSTICK_RT = 5
 JOYSTICK_RJ_UD = 4
 JOYSTICK_LT = 2
 JOYSTICK_LJ_UD = 1
-# TODO CELINE: Add DPAD global variables
-DPAD_LR = 128
-DPAD_UD = 127
-DPAD_LEFT = 8
-DPAD_RIGHT = 14 
-DPAD_UP = 15
-DPAD_DOWN = 18
+DPAD_LU = 128
+DPAD_RD = 127
+# DPAD registration
+DPAD_LEFT = 6
+DPAD_RIGHT = 6
+DPAD_UP = 7
+DPAD_DOWN = 7
+# Psuedo-button events
+DPAD_LEFT_ON = 11
+DPAD_LEFT_OFF = 111
+DPAD_RIGHT_ON = 12
+DPAD_RIGHT_OFF = 112
+DPAD_UP_ON = 13
+DPAD_UP_OFF = 113
+DPAD_DOWN_ON = 14
+DPAD_DOWN_OFF = 114
 
 # Data streams
 UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-controller_device = open("/dev/input/js2","rb")
+controller_device = open("/dev/input/js0","rb")
 
 def update_speed(wheel_side, new_speed):
         global current_speed_right, current_speed_left
@@ -135,27 +144,26 @@ async def send_commands(button=None):
                 print("Sending linear actuator forward stop")
                 UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_Y_OFF), serverAddressPort)
                 return
-        # TODO CELINE: Add move camera left/right up/down
-        # send the dpad commands
-        if button == DPAD_LEFT:
-            print("\ndpad left")
+        # Send the DPAD commands
+        if button == DPAD_LEFT_ON:
+            print("Sending DPAD left")
             degree = -5
-            UDPClientSocket.sendto(struct.pack('BB', COMMAND_LR_SERVO, degree), serverAddressPort)
+            UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_LR_SERVO, degree), serverAddressPort)
             return
-        if button == DPAD_RIGHT:
-            print("\ndpad right")
+        if button == DPAD_RIGHT_ON:
+            print("Sending DPAD right")
             degree = 5
-            UDPClientSocket.sendto(struct.pack('BB', COMMAND_LR_SERVO, degree), serverAddressPort)
+            UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_LR_SERVO, degree), serverAddressPort)
             return
-        if button == DPAD_UP:
-            print("\ndpad up")
+        if button == DPAD_UP_ON:
+            print("Sending DPAD up")
             degree = 5
-            UDPClientSocket.sendto(struct.pack('BB', COMMAND_UD_SERVO, degree), serverAddressPort)
+            UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_UD_SERVO, degree), serverAddressPort)
             return
-        if button == DPAD_DOWN:
-            print("\ndpad down")
+        if button == DPAD_DOWN_ON:
+            print("Sending DPAD down")
             degree = -5
-            UDPClientSocket.sendto(struct.pack('BB', COMMAND_UD_SERVO, degree), serverAddressPort)
+            UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_UD_SERVO, degree), serverAddressPort)
             return
         if abs(current_speed_right) > 0:
                 effective_bonus_speed = bonus_speed if ((current_speed_right>0) == True) else -bonus_speed
@@ -229,26 +237,22 @@ async def parse_command(loop):
                         else:
                                 print("\nOTHER BUTTON")
                 elif INPUT_TYPE == JOYSTICK:
-                        print("Joystick detected")
-                        # TODO CELINE: Camera control
-                        if command[5] == DPAD_LR:  # D-Pad L/U
-                                print("Left right joystick detected")
+                        if command[5] == DPAD_LU:  # D-Pad L/U
                                 if command[7] == DPAD_LEFT:  # Left
-                                    print("\n left dpad")
-                                    await send_commands(DPAD_LEFT)
-                                elif command[7] == DPAD_UP:  # Up
-                                    print("\n up dpad")
-                                    await send_commands(DPAD_UP)
+                                    #print("\nLeft DPAD")
+                                    await send_commands(DPAD_LEFT_ON)
+                                elif command[7] == DPAD_UP:  # Right
+                                    #print("\nUp DPAD")
+                                    await send_commands(DPAD_UP_ON)
                                 else:
                                     pass
-                        elif command[5] == DPAD_UD: # D-Pad R/D
-                                print("Up down joystick detected")
+                        elif command[5] == DPAD_RD: # D-Pad R/D
                                 if command[7] == DPAD_RIGHT:  # Right
-                                    print("\n right dpad")
-                                    await send_commands(DPAD_RIGHT)
+                                    #print("\nRight DPAD")
+                                    await send_commands(DPAD_RIGHT_ON)
                                 elif command[7] == DPAD_DOWN:  # Down
-                                    print("\n down dpad")
-                                    await send_commands(DPAD_DOWN)
+                                    #print("\nDown DPAD")
+                                    await send_commands(DPAD_DOWN_ON)
                                 else:
                                     pass
                         # TODO: Excavation
@@ -290,8 +294,8 @@ async def parse_command(loop):
                                         else:
                                                 print("Unhandled joystick")
                         else:
-                                print("OTHER JOYSTICK")
-                                print(command)
+                                #print("OTHER JOYSTICK")
+                                #print(command)
                                 pass
                 else:
                         #print(command)
