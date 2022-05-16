@@ -55,6 +55,8 @@ all_left_wheel_motors = []
 all_ladder_position_motors = []
 all_digging_motors = []
 arduino = None
+position_servo_pitch = 0
+position_servo_yaw = 0
 
 def should_ramp_up_motors(current_time, speed):
     # Only ramp up if speed is greater than 20% and we haven't already ramped up
@@ -192,6 +194,8 @@ def open_dev(usbcontext=None):
         arduino = ser.Serial('/dev/ttyACM0', baudrate=9600, timeout=.1)
     except Exception:
         arduino = ser.Serial('/dev/ttyACM1', baudrate=9600, timeout=.1)
+    write_arduino(1, 0)
+    write_arduino(2, 0)
 
     if usbcontext is None:
         usbcontext = usb1.USBContext()
@@ -233,7 +237,7 @@ def open_dev(usbcontext=None):
     #    raise Exception("Insufficient wheel motors detected")
 
 def main():
-    global CURRENT_ACTION, STOP, FORWARD, RIGHT_SIDE, LEFT_SIDE, BUTTON_START_ON, all_digging_motors, all_ladder_position_motors, all_right_wheel_motors, all_left_wheel_motors, arduino
+    global CURRENT_ACTION, STOP, FORWARD, RIGHT_SIDE, LEFT_SIDE, BUTTON_START_ON, all_digging_motors, all_ladder_position_motors, all_right_wheel_motors, all_left_wheel_motors, arduino, position_servo_pitch, position_servo_yaw
     print("Osprey Robotics Control Server")
     usbcontext = usb1.USBContext()
     open_dev(usbcontext)
@@ -303,6 +307,26 @@ def main():
             else:
                 #print("Received button event: %i" % command[1])
                 pass
+        elif command[0] == 4:
+            print("Servo 1")
+            degree = command[1]
+            position_servo_yaw += degree
+            if position_servo_yaw < 0:
+                position_servo_yaw = 0
+            elif position_servo_yaw > 180:
+                position_servo_yaw = 180
+            print(position_servo_yaw)
+            write_arduino(1, position_servo_yaw)
+        elif command[0] == 5:
+            print("Servo 2")
+            degree = command[1]
+            position_servo_pitch += degree
+            if position_servo_pitch < 0:
+                position_servo_pitch = 0
+            elif position_servo_pitch > 180:
+                position_servo_pitch = 180
+            print(position_servo_pitch)
+            write_arduino(2, position_servo_pitch)
         else:
             pass
     """
