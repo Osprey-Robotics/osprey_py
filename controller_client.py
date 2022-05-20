@@ -19,7 +19,9 @@ COMMAND_LEFT_WHEELS = 2
 COMMAND_BUTTON_PRESS = 3
 COMMAND_LR_SERVO = 4
 COMMAND_UD_SERVO = 5
-serverAddressPort = ("192.168.1.217", 20222)
+BUTTON_LB_STATE = 0 # 0 is off, 1 is on
+BUTTON_RB_STATE = 0 # 0 is off, 1 is on
+serverAddressPort = ("192.168.1.101", 20222)
 INPUT_TYPE = 0
 new_commands = []
 # Bandwidth saving threshold, 0-127
@@ -41,6 +43,10 @@ BUTTON_X_ON = 2
 BUTTON_X_OFF = 102
 BUTTON_Y_ON = 3
 BUTTON_Y_OFF = 103
+BUTTON_LB_ON = 4
+BUTTON_LB_OFF = 104
+BUTTON_RB_ON = 5
+BUTTON_RB_OFF = 105
 BUTTON_BACK_ON = 6
 BUTTON_BACK_OFF = 106
 BUTTON_START_ON = 7
@@ -177,16 +183,22 @@ async def send_commands(button=None):
                 #print("\rSending left speed:  %s%s (%s)" % (speed_sign, str(abs(current_speed_left)).zfill(3), str(time.time())), end = '')
                 print("Sending left speed:  %s%s (%s)" % (speed_sign, str(abs(current_speed_left+effective_bonus_speed)).zfill(3), str(time.time())))
                 UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_LEFT_WHEELS, current_speed_left+effective_bonus_speed), serverAddressPort)
+        if BUTTON_LB_STATE == 1:
+                print("Sending bucket ladder up")
+                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_LB_ON), serverAddressPort)
+        if BUTTON_RB_STATE == 1:
+                print("Sending bucket ladder down")
+                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_RB_ON), serverAddressPort)
         # TODO: Excavation
         # TODO: Deposition
         # TODO: Camera movement
-        if (current_speed_right == 0) and (current_speed_left == 0) and (button is None):
+        if (current_speed_right == 0) and (current_speed_left == 0) and (button is None) and (BUTTON_LB_STATE == 0) and (BUTTON_RB_STATE == 0):
                 print("Unrecognized action")
         return
 
 # Parse commands from controller
 async def parse_command(loop):
-        global current_speed_right, current_speed_left, new_commands, bonus_speed, bonus_speed_max
+        global current_speed_right, current_speed_left, new_commands, bonus_speed, bonus_speed_max, BUTTON_LB_STATE, BUTTON_RB_STATE
         while True:
                 if len(new_commands) > 0:
                         if bonus_speed > 0:
@@ -195,7 +207,7 @@ async def parse_command(loop):
                 else:
                         if (bonus_speed < bonus_speed_max) and ((abs(current_speed_right) >= 60) or (abs(current_speed_left) >= 60)):
                                 bonus_speed += 1
-                        if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0):
+                        if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0) or (BUTTON_LB_STATE == 1) or (BUTTON_RB_STATE == 1):
                                 await send_commands()
                         await asyncio.sleep(.01)
                         continue
@@ -227,6 +239,22 @@ async def parse_command(loop):
                                 else:
                                         #print("\nY BUTTON RELEASED")
                                         await send_commands(BUTTON_Y_OFF)
+                        elif (INPUT_ID == BUTTON_LB_ON):
+                                if button_pressed:
+                                        #print("\nLB BUTTON PRESSED")
+                                        BUTTON_LB_STATE = 1
+                                        await send_commands(BUTTON_LB_ON)
+                                else:
+                                        #print("\nLB BUTTON RELEASED")
+                                        BUTTON_LB_STATE = 0
+                        elif (INPUT_ID == BUTTON_RB_ON):
+                                if button_pressed:
+                                        #print("\nRB BUTTON PRESSED")
+                                        BUTTON_RB_STATE = 1
+                                        await send_commands(BUTTON_RB_ON)
+                                else:
+                                        #print("\nRB BUTTON RELEASED")
+                                        BUTTON_RB_STATE = 0
                         elif (INPUT_ID == BUTTON_START_ON) and button_pressed:
                                 #print("\nSTART BUTTON")
                                 await send_commands(BUTTON_START_ON)
@@ -300,7 +328,7 @@ async def parse_command(loop):
                 else:
                         #print(command)
                         pass
-                if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0):
+                if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0) or (BUTTON_LB_STATE == 1) or (BUTTON_RB_STATE == 1):
                         await send_commands()
 
                 # Schedule to run again in .01 seconds
