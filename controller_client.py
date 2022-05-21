@@ -13,23 +13,28 @@ import time
 # Program global variables
 current_speed_right = 0
 current_speed_left = 0
+current_speed_bucket_ladder = 0
 COMMAND_WHEELS_STOP = 0
 COMMAND_RIGHT_WHEELS = 1
 COMMAND_LEFT_WHEELS = 2
 COMMAND_BUTTON_PRESS = 3
 COMMAND_LR_SERVO = 4
 COMMAND_UD_SERVO = 5
+COMMAND_BUCKET_LADDER = 6
 BUTTON_LB_STATE = 0 # 0 is off, 1 is on
 BUTTON_RB_STATE = 0 # 0 is off, 1 is on
 serverAddressPort = ("192.168.1.101", 20222)
+#serverAddressPort = ("192.168.1.217", 20222)
 INPUT_TYPE = 0
 new_commands = []
 # Bandwidth saving threshold, 0-127
 # Higher numbers equate to saving more bandwidth at the expense of less speeds
 bandwidth_saving_threshold = 0
-# "Bonus speed": Prevent robot from accelerating too quickly by incrementing speed from 70 if 127 is held, and keeping all other speeds 55% slower
+# "Bonus speed": Prevent robot from accelerating too quickly by incrementing speed from 70 if 127 is held, and keeping all other speeds 45% slower (25% slower for the bucket ladder)
 speed_factor=0.55
+speed_factor_bucket_ladder=0.78
 bonus_speed=0
+bonus_speed_bucket_ladder=0
 bonus_speed_max=57
 
 # Controller global variables
@@ -78,27 +83,44 @@ DPAD_DOWN_OFF = 114
 
 # Data streams
 UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-controller_device = open("/dev/input/js0","rb")
+# Virtual machines assign the controller to js2
+# TODO: Enumerate devices for the vendor/product
+try:
+    controller_device = open("/dev/input/js2","rb")
+except Exception:
+    controller_device = open("/dev/input/js0","rb")
 
 def update_speed(wheel_side, new_speed):
-        global current_speed_right, current_speed_left
+        global current_speed_right, current_speed_left, current_speed_bucket_ladder
         if wheel_side == COMMAND_RIGHT_WHEELS:
                 current_speed_right = new_speed
         elif wheel_side == COMMAND_LEFT_WHEELS:
                 current_speed_left = new_speed
+        elif wheel_side == COMMAND_BUCKET_LADDER:
+                current_speed_bucket_ladder = new_speed
         else:
                 print("Unrecognized motors")
 
 def possibly_update_speed(wheel_side, new_speed):
-        global current_speed_right, current_speed_left, bandwidth_saving_threshold, speed_factor, bonus_speed
-        new_speed = round(new_speed*speed_factor)
+        global current_speed_right, current_speed_left, current_speed_bucket_ladder, bandwidth_saving_threshold, speed_factor, speed_factor_bucket_ladder, bonus_speed, bonus_speed_bucket_ladder
+        if wheel_side == COMMAND_BUCKET_LADDER:
+            new_speed = round(new_speed*speed_factor_bucket_ladder)
+        else:
+            new_speed = round(new_speed*speed_factor)
         orig_speed = 0
+        # TODO: Can I just shorten the next two if statements into one?
         if new_speed == 0:
-                bonus_speed = 0
+                if wheel_side == COMMAND_BUCKET_LADDER:
+                    bonus_speed_bucket_ladder = 0
+                else:
+                    bonus_speed = 0
                 update_speed(wheel_side, new_speed)
                 return
-        if abs(new_speed) <= 20:
-                bonus_speed = 0
+        if ((wheel_side != COMMAND_BUCKET_LADDER) and (abs(new_speed) <= 20)) or ((wheel_side == COMMAND_BUCKET_LADDER) and (abs(new_speed) <= 40)):
+                if wheel_side == COMMAND_BUCKET_LADDER:
+                    bonus_speed_bucket_ladder = 0
+                else:
+                    bonus_speed = 0
                 # Make sure joystick goes to zero
                 update_speed(wheel_side, 0)
                 return
@@ -106,6 +128,8 @@ def possibly_update_speed(wheel_side, new_speed):
                 orig_speed = current_speed_right
         elif wheel_side == COMMAND_LEFT_WHEELS:
                 orig_speed = current_speed_left
+        elif wheel_side == COMMAND_BUCKET_LADDER:
+                orig_speed = current_speed_bucket_ladder
         else:
                 print("Unrecognized motors")
         if ((abs(orig_speed)+bandwidth_saving_threshold) <= abs(new_speed)) or ((abs(orig_speed)-bandwidth_saving_threshold) >= abs(new_speed)):
@@ -123,7 +147,7 @@ def thread_function(name):
 
 # Sends commands to the server
 async def send_commands(button=None):
-        global UDPClientSocket, serverAddressPort, current_speed_right, current_speed_left, bonus_speed
+        global UDPClientSocket, serverAddressPort, current_speed_right, current_speed_left, current_speed_bucket_ladder, bonus_speed, bonus_speed_bucket_ladder
         if button == BUTTON_START_ON:
                 print("Requesting motor reset")
                 UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_START_ON), serverAddressPort)
@@ -183,31 +207,40 @@ async def send_commands(button=None):
                 #print("\rSending left speed:  %s%s (%s)" % (speed_sign, str(abs(current_speed_left)).zfill(3), str(time.time())), end = '')
                 print("Sending left speed:  %s%s (%s)" % (speed_sign, str(abs(current_speed_left+effective_bonus_speed)).zfill(3), str(time.time())))
                 UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_LEFT_WHEELS, current_speed_left+effective_bonus_speed), serverAddressPort)
+        if abs(current_speed_bucket_ladder) > 0:
+                effective_bonus_speed = bonus_speed_bucket_ladder if ((current_speed_bucket_ladder>0) == True) else -bonus_speed_bucket_ladder
+                speed_sign = "+" if ((current_speed_bucket_ladder>0) == True) else "-"
+                #print("\rSending bucket ladder speed:  %s%s (%s)" % (speed_sign, str(abs(current_speed_bucket_ladder)).zfill(3), str(time.time())), end = '')
+                print("Sending bucket ladder speed:  %s%s (%s)" % (speed_sign, str(abs(current_speed_bucket_ladder+effective_bonus_speed)).zfill(3), str(time.time())))
+                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUCKET_LADDER, current_speed_bucket_ladder+effective_bonus_speed), serverAddressPort)
         if BUTTON_LB_STATE == 1:
                 print("Sending bucket ladder up")
                 UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_LB_ON), serverAddressPort)
         if BUTTON_RB_STATE == 1:
                 print("Sending bucket ladder down")
                 UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_RB_ON), serverAddressPort)
-        # TODO: Excavation
         # TODO: Deposition
         # TODO: Camera movement
-        if (current_speed_right == 0) and (current_speed_left == 0) and (button is None) and (BUTTON_LB_STATE == 0) and (BUTTON_RB_STATE == 0):
+        if (current_speed_right == 0) and (current_speed_left == 0) and (current_speed_bucket_ladder == 0) and (button is None) and (BUTTON_LB_STATE == 0) and (BUTTON_RB_STATE == 0):
                 print("Unrecognized action")
         return
 
 # Parse commands from controller
 async def parse_command(loop):
-        global current_speed_right, current_speed_left, new_commands, bonus_speed, bonus_speed_max, BUTTON_LB_STATE, BUTTON_RB_STATE
+        global current_speed_right, current_speed_left, current_speed_bucket_ladder, new_commands, bonus_speed, bonus_speed_bucket_ladder, bonus_speed_max, BUTTON_LB_STATE, BUTTON_RB_STATE
         while True:
                 if len(new_commands) > 0:
                         if bonus_speed > 0:
                                 bonus_speed -= 1
+                        if bonus_speed_bucket_ladder > 0:
+                                bonus_speed_bucket_ladder -= 1
                         command = new_commands.pop()
                 else:
                         if (bonus_speed < bonus_speed_max) and ((abs(current_speed_right) >= 60) or (abs(current_speed_left) >= 60)):
                                 bonus_speed += 1
-                        if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0) or (BUTTON_LB_STATE == 1) or (BUTTON_RB_STATE == 1):
+                        if (bonus_speed_bucket_ladder < bonus_speed_max) and (abs(current_speed_bucket_ladder) >= 100):
+                                bonus_speed_bucket_ladder += 1
+                        if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0) or (abs(current_speed_bucket_ladder) > 0) or (BUTTON_LB_STATE == 1) or (BUTTON_RB_STATE == 1):
                                 await send_commands()
                         await asyncio.sleep(.01)
                         continue
@@ -283,26 +316,24 @@ async def parse_command(loop):
                                     await send_commands(DPAD_DOWN_ON)
                                 else:
                                     pass
-                        # TODO: Excavation
                         # Triggers
-                        elif (INPUT_ID == JOYSTICK_RT):
+                        elif (INPUT_ID == JOYSTICK_RT) or (INPUT_ID == JOYSTICK_LT):
+                                new_speed = None
                                 if command[5] >= 128:
-                                        current_speed = command[5]-128
-                                        print("JOYSTICK RT %s" % str(current_speed))
+                                        new_speed = command[5]-128
                                 elif command[5] <= 127:
-                                        current_speed = command[5]+128
-                                        print("JOYSTICK RT %s" % str(current_speed))
+                                        new_speed = command[5]+128
                                 else:
                                         print("Unhandled joystick")
-                        elif (INPUT_ID == JOYSTICK_LT):
-                                if command[5] >= 128:
-                                        current_speed = command[5]-128
-                                        print("JOYSTICK LT %s" % str(current_speed))
-                                elif command[5] <= 127:
-                                        current_speed = command[5]+128
-                                        print("JOYSTICK LT %s" % str(current_speed))
-                                else:
-                                        print("Unhandled joystick")
+                                if isinstance(new_speed, int):
+                                        if INPUT_ID == JOYSTICK_RT:
+                                                #print("JOYSTICK RJ UD %s" % str(new_speed))
+                                                possibly_update_speed(COMMAND_BUCKET_LADDER, -new_speed)
+                                        elif INPUT_ID == JOYSTICK_LT:
+                                                #print("JOYSTICK LJ UD %s" % str(new_speed))
+                                                possibly_update_speed(COMMAND_BUCKET_LADDER, new_speed)
+                                        else:
+                                                print("Unhandled joystick")
                         # Joysticks
                         elif (INPUT_ID == JOYSTICK_RJ_UD) or (INPUT_ID == JOYSTICK_LJ_UD):
                                 new_speed = None
@@ -328,7 +359,7 @@ async def parse_command(loop):
                 else:
                         #print(command)
                         pass
-                if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0) or (BUTTON_LB_STATE == 1) or (BUTTON_RB_STATE == 1):
+                if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0) or (abs(current_speed_bucket_ladder) > 0) or (BUTTON_LB_STATE == 1) or (BUTTON_RB_STATE == 1):
                         await send_commands()
 
                 # Schedule to run again in .01 seconds
