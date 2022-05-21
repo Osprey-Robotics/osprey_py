@@ -21,6 +21,9 @@ int ardprintf(char * str, ...) {
             temp[0] = '\0';
 
             switch (str[++i]) {
+            case 'h':
+                Serial.print(va_arg(argv, unsigned short));
+                break;
             case 'd':
                 Serial.print(va_arg(argv, int));
                 break;
@@ -60,7 +63,7 @@ Servo myservo1;
 Servo myservo2;
 struct message_frame {
     byte FunctionCode;
-    byte Degrees; // char
+    unsigned short Degrees; // unsigned short
     //byte Checksum;
 }
 data;
@@ -68,7 +71,7 @@ static message_frame current_message {
     .FunctionCode = 0,
         .Degrees = 0
 };
-const int BUFFER_SIZE = 2;
+const int BUFFER_SIZE = 3;
 char buf[BUFFER_SIZE];
 
 // Actuator constants
@@ -118,10 +121,17 @@ void loop() {
         Limit_Switches(); //checks if the actuator can move
         // Read the incoming bytes
         int rlen = Serial.readBytes(buf, BUFFER_SIZE);
-        current_message.FunctionCode = buf[0];
-        current_message.Degrees = buf[1];
+        if (rlen != BUFFER_SIZE) {
+            return;
+        }
+        memcpy(&(current_message.FunctionCode), buf, sizeof(byte));
+        memcpy(&(current_message.Degrees), buf+1, sizeof(unsigned short));
         // Prints the received data
-        ardprintf("Received function %d with degrees %d", current_message.FunctionCode, current_message.Degrees);
+        Serial.println("Received function");
+        Serial.println(current_message.FunctionCode);
+        Serial.println(current_message.Degrees);
+        //ardprintf("Received function %d with degrees %h", current_message.FunctionCode, current_message.Degrees);
+        /*
         if (current_message.FunctionCode == 1) {
             myservo1.write(current_message.Degrees);
             delay(10); // Waits 10ms for the servo to reach the position
@@ -135,6 +145,7 @@ void loop() {
         } else if (current_message.FunctionCode == 5) {
             Reverse_Actuator();
         }
+        */
     }
 }
 
