@@ -21,9 +21,6 @@ int ardprintf(char * str, ...) {
             temp[0] = '\0';
 
             switch (str[++i]) {
-            case 'h':
-                Serial.print(va_arg(argv, unsigned short));
-                break;
             case 'd':
                 Serial.print(va_arg(argv, int));
                 break;
@@ -63,7 +60,7 @@ Servo myservo1;
 Servo myservo2;
 struct message_frame {
     byte FunctionCode;
-    unsigned short Degrees; // unsigned short
+    byte Degrees;
     //byte Checksum;
 }
 data;
@@ -71,7 +68,7 @@ static message_frame current_message {
     .FunctionCode = 0,
         .Degrees = 0
 };
-const int BUFFER_SIZE = 3;
+const int BUFFER_SIZE = 2;
 char buf[BUFFER_SIZE];
 
 // Actuator constants
@@ -125,12 +122,9 @@ void loop() {
             return;
         }
         memcpy(&(current_message.FunctionCode), buf, sizeof(byte));
-        memcpy(&(current_message.Degrees), buf+1, sizeof(unsigned short));
+        memcpy(&(current_message.Degrees), buf+1, sizeof(byte));
         // Prints the received data
-        Serial.println("Received function");
-        Serial.println(current_message.FunctionCode);
-        Serial.println(current_message.Degrees);
-        //ardprintf("Received function %d with degrees %h", current_message.FunctionCode, current_message.Degrees);
+        ardprintf("Received function %d with degrees %d", current_message.FunctionCode, current_message.Degrees);
         /*
         if (current_message.FunctionCode == 1) {
             myservo1.write(current_message.Degrees);
