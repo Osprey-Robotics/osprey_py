@@ -310,6 +310,17 @@ def main():
                 usbcontext = usb1.USBContext()
                 open_dev(usbcontext)
                 print("Motor reset complete")
+            elif command[1] == BUTTON_A_ON:
+                # Deposition bucket forward
+                print("Deposition forward")
+                write_arduino(7, 0)
+            elif command[1] == BUTTON_B_ON:
+                # Deposition bucket reverse
+                print("Deposition reverse")
+                write_arduino(9, 0)
+            elif (command[1] == BUTTON_A_OFF) or (command[1] == BUTTON_B_OFF):
+                print("Actuator stop")
+                write_arduino(3, 0)
             elif command[1] == BUTTON_Y_ON:
                 # Linear actuator forward
                 print("Actuator forward")
@@ -354,6 +365,26 @@ def main():
                 position_servo_pitch = 180
             print(position_servo_pitch)
             write_arduino(2, position_servo_pitch)
+        elif command[0] == 7:
+            print("Servo 3")
+            degree = command[1]
+            position_servo_yaw += degree
+            if position_servo_yaw < 0:
+                position_servo_yaw = 0
+            elif position_servo_yaw > 180:
+                position_servo_yaw = 180
+            print(position_servo_yaw)
+            write_arduino(3, position_servo_yaw)
+        elif command[0] == 9:
+            print("Servo 4")
+            degree = command[1]
+            position_servo_yaw += degree
+            if position_servo_yaw < 0:
+                position_servo_yaw = 0
+            elif position_servo_yaw > 180:
+                position_servo_yaw = 180
+            print(position_servo_yaw)
+            write_arduino(4, position_servo_yaw)
         elif command[0] == 6:
             WHEEL_SPEED = round(float(command[1]*1.0)/float(255),2)
             print("Bucket ladder speed: %s" % (str(WHEEL_SPEED)))
