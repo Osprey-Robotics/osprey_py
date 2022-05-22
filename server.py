@@ -60,8 +60,8 @@ all_left_wheel_motors = []
 all_ladder_position_motors = []
 all_digging_motors = []
 arduino = None
-position_servo_pitch = 130
-position_servo_yaw = 100
+position_servo_pitch = 0
+position_servo_yaw = 0
 
 def should_ramp_up_motors(current_time, speed):
     # Only ramp up if speed is greater than 20% and we haven't already ramped up
@@ -176,7 +176,7 @@ def dig_bucket_ladder(serial, dev, WHEEL_SPEED):
     global CURRENT_ACTION, DIG, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
     dev.claimInterface(0)
     if serial == SER_LADDER_DIG:
-        dev.bulkWrite(0x02, generate_speed(WHEEL_SPEED), timeout=1000) # Locked at 15%
+        dev.bulkWrite(0x02, generate_speed(WHEEL_SPEED), timeout=1000)
     else:
         raise Exception("Unknown serial detected: %s" % serial)
     try:
