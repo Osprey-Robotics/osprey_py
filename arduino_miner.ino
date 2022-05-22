@@ -66,28 +66,12 @@ struct message_frame {
 data;
 static message_frame current_message {
     .FunctionCode = 0,
-        .Degrees = 0
+    .Degrees = 0
 };
 const int BUFFER_SIZE = 2;
 char buf[BUFFER_SIZE];
-
-// Actuator constants
-/***************************************************************************************************
- * When led 1 and 2 is on, actuator moves forward. When led 1 and 2 off, actuator moves backwards. *
- * When led 3 and 4 is on, the actuator moves. When either led 3 or 4 is off, actuator stops.      *
- ***************************************************************************************************/
-const int DEBOUNCE_TIME = 50; // the time it takes for the button to rebound when released
-//int actuatorForward = 13;
-//int actuatorBackward = 12;
-int limitSwitch = 11;
-/*relay 1 and 2 controls forward and reverse, 3 and 4 both need to be "HIGH" to run actuators*/
 int relay_1 = 7;
 int relay_2 = 6;
-int relay_3 = 5;
-int relay_4 = 4;
-int relay1And2State = LOW; // actuator default set to reverse "LOW"
-int actuatorOn = HIGH;
-int actuatorOff = LOW;
 
 void setup() {
     Serial.begin(9600); // Open serial port 9600 bps
@@ -99,23 +83,15 @@ void setup() {
     pinMode(9, INPUT);
     pinMode(3, INPUT);
 
-    // Sets up 5V power
-    pinMode(2, OUTPUT);
-    digitalWrite(2, HIGH);
-
-    //pinMode(actuatorForward, INPUT);
-    //pinMode(actuatorBackward, INPUT);
-    pinMode(limitSwitch, INPUT);
-
     pinMode(relay_1, OUTPUT);
     pinMode(relay_2, OUTPUT);
-    pinMode(relay_3, OUTPUT);
-    pinMode(relay_4, OUTPUT);
+
+    digitalWrite(relay_1, LOW);
+    digitalWrite(relay_2, LOW);
 }
 
 void loop() {
     if (Serial.available() > 0) {
-        Limit_Switches(); //checks if the actuator can move
         // Read the incoming bytes
         int rlen = Serial.readBytes(buf, BUFFER_SIZE);
         if (rlen != BUFFER_SIZE) {
@@ -125,7 +101,6 @@ void loop() {
         memcpy(&(current_message.Degrees), buf+1, sizeof(byte));
         // Prints the received data
         ardprintf("Received function %d with degrees %d", current_message.FunctionCode, current_message.Degrees);
-        /*
         if (current_message.FunctionCode == 1) {
             myservo1.write(current_message.Degrees);
             delay(10); // Waits 10ms for the servo to reach the position
@@ -133,66 +108,15 @@ void loop() {
             myservo2.write(current_message.Degrees);
             delay(10); // Waits 10ms for the servo to reach the position
         } else if (current_message.FunctionCode == 3) {
-            digitalWrite(relay_4, actuatorOff); // Stops actuator when button released
+            // Actuator off
+            digitalWrite(relay_1, LOW);
+            digitalWrite(relay_2, LOW);
         } else if (current_message.FunctionCode == 4) {
-            Forward_Actuator();
+            // Actuator forward
+            digitalWrite(relay_1, HIGH);
         } else if (current_message.FunctionCode == 5) {
-            Reverse_Actuator();
+            // Actuator reverse
+            digitalWrite(relay_2, HIGH);
         }
-        */
-    }
-}
-
-/********************************************************************************
- * checks if limit switch is pressed then opens the third relay.                *
- * if neither is pressed then it does nothing.                                  *
- ********************************************************************************/
-void Limit_Switches() {
-    if (digitalRead(limitSwitch) == HIGH) {
-        digitalWrite(relay_3, actuatorOff);
-    } else {
-        digitalWrite(relay_3, actuatorOn);
-    }
-    delay(DEBOUNCE_TIME);
-}
-
-/**************************************************************************************
- * checks if the forward button is pressed and makes the actuator move forward "HIGH" *
- * then opens relay 4 when released. If not pressed down then it does nothing.        *
- **************************************************************************************/
-void Forward_Actuator() {
-    Limit_Switches();
-    // relay1And2State makes the actuator move forward when == "HIGH"
-    if (relay1And2State == LOW) {
-        Change_Relay_State();
-        digitalWrite(relay_1, relay1And2State);
-        digitalWrite(relay_2, relay1And2State);
-    }
-    digitalWrite(relay_4, actuatorOn);
-}
-
-/*************************************************************************************
- * checks if the reverse button is pressed and makes the actuator move reverse "LOW" *
- * then opens relay 4 when released. If not pressed down then it does nothing.       *
- *************************************************************************************/
-void Reverse_Actuator() {
-    Limit_Switches(); // probably needs to be removed because can brick the actuator if limit switch can't be reset
-    // relay1And2State makes the actuator move backwards when == "LOW"
-    if (relay1And2State == HIGH) {
-        Change_Relay_State();
-        digitalWrite(relay_1, relay1And2State);
-        digitalWrite(relay_2, relay1And2State);
-    }
-    digitalWrite(relay_4, actuatorOn);
-}
-
-/***************************************************************************************
- * changes the variable relayState to "LOW" if it is "HIGH" and "HIGH" if it is "LOW". *
- ***************************************************************************************/
-void Change_Relay_State() {
-    if (relay1And2State == LOW) {
-        relay1And2State = HIGH;
-    } else {
-        relay1And2State = LOW;
     }
 }
