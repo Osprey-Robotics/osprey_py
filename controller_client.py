@@ -4,6 +4,7 @@
 
 # Imports
 import asyncio
+import glob
 import socket
 import struct
 import sys
@@ -83,12 +84,11 @@ DPAD_DOWN_OFF = 114
 
 # Data streams
 UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-# Virtual machines assign the controller to js2
-# TODO: Enumerate devices for the vendor/product
 try:
-    controller_device = open("/dev/input/js2","rb")
+    controller_device = open(glob.glob("/dev/input/by-id/usb-Logitech_Gamepad_F310_????????-joystick")[0], "rb")
 except Exception:
-    controller_device = open("/dev/input/js0","rb")
+    print("Could not find a controller connected to this system")
+    sys.exit(1)
 
 def update_speed(wheel_side, new_speed):
         global current_speed_right, current_speed_left, current_speed_bucket_ladder
@@ -108,14 +108,6 @@ def possibly_update_speed(wheel_side, new_speed):
         else:
             new_speed = round(new_speed*speed_factor)
         orig_speed = 0
-        # TODO: Can I just shorten the next two if statements into one?
-        if new_speed == 0:
-                if wheel_side == COMMAND_BUCKET_LADDER:
-                    bonus_speed_bucket_ladder = 0
-                else:
-                    bonus_speed = 0
-                update_speed(wheel_side, new_speed)
-                return
         if ((wheel_side != COMMAND_BUCKET_LADDER) and (abs(new_speed) <= 20)) or ((wheel_side == COMMAND_BUCKET_LADDER) and (abs(new_speed) <= 40)):
                 if wheel_side == COMMAND_BUCKET_LADDER:
                     bonus_speed_bucket_ladder = 0
