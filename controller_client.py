@@ -212,6 +212,23 @@ async def send_commands(button=None):
                 print("Sending bucket ladder down")
                 UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_RB_ON), serverAddressPort)
         # TODO: Deposition
+                #Send the A/B Command
+        if button == BUTTON_A_ON:
+                print("Sending depostition bucket reverse start")
+                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_A_ON), serverAddressPort)
+                return
+        if button == BUTTON_A_OFF:
+                print("Sending deposition bucket reverse stop")
+                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_A_OFF), serverAddressPort)
+                return
+        if button == BUTTON_B_ON:
+                print("Sending deposition bucket forward start")
+                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_B_ON), serverAddressPort)
+                return
+        if button == BUTTON_B_OFF:
+                print("Sending deposition bucket forward stop")
+                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_B_OFF), serverAddressPort)
+                return
         # TODO: Camera movement
         if (current_speed_right == 0) and (current_speed_left == 0) and (current_speed_bucket_ladder == 0) and (button is None) and (BUTTON_LB_STATE == 0) and (BUTTON_RB_STATE == 0):
                 print("Unrecognized action")
