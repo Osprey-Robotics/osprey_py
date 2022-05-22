@@ -59,6 +59,7 @@ all_right_wheel_motors = []
 all_left_wheel_motors = []
 all_ladder_position_motors = []
 all_digging_motors = []
+all_deposition_motors = []
 arduino = None
 position_servo_pitch = 0
 position_servo_yaw = 0
@@ -186,6 +187,35 @@ def dig_bucket_ladder(serial, dev, WHEEL_SPEED):
         #print("Error: %s" % str(e))
         return
 
+def deposition_forward(serial, dev):
+    global CURRENT_ACTION, DOWN, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
+    dev.claimInterface(0)
+    if serial == SER_DEPOSITION:
+        dev.bulkWrite(0x02, generate_speed(0.30), timeout=1000) # Locked at 30%
+    else:
+        raise Exception("Unknown serial detected: %s" % serial)
+    try:
+        dev.bulkWrite(0x02, binascii.a2b_hex(COMM_FORWARD))
+        LAST_DRIVE = time.time()
+    except Exception as e:
+        #print("Error: %s" % str(e))
+        return
+
+def deposition_reverse(serial, dev):
+    global CURRENT_ACTION, UP, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
+    dev.claimInterface(0)
+    if serial == SER_DEPOSITION:
+        dev.bulkWrite(0x02, generate_speed(-0.30), timeout=1000) # Locked at -30%
+    else:
+        raise Exception("Unknown serial detected: %s" % serial)
+    try:
+        dev.bulkWrite(0x02, binascii.a2b_hex(COMM_FORWARD))
+        LAST_DRIVE = time.time()
+    except Exception as e:
+        #print("Error: %s" % str(e))
+        return
+
+    
 def write_arduino(num, deg):
     global arduino
     try:
@@ -243,6 +273,8 @@ def open_dev(usbcontext=None):
                 all_ladder_position_motors.append((serial, motor))
             elif serial in [SER_LADDER_DIG]:
                 all_digging_motors.append((serial, motor))
+            elif serial in [SER_DEPOSITION]
+                all_deposition_motors.append((serial,motor))
             else:
                 #raise Exception("Unable to recognize attached Spark MAX motor controller with serial number: %s" % serial)
                 pass
@@ -313,14 +345,11 @@ def main():
             elif command[1] == BUTTON_A_ON:
                 # Deposition bucket forward
                 print("Deposition forward")
-                write_arduino(7, 0)
+                depositon_forward #correct?
             elif command[1] == BUTTON_B_ON:
                 # Deposition bucket reverse
                 print("Deposition reverse")
-                write_arduino(9, 0)
-            elif (command[1] == BUTTON_A_OFF) or (command[1] == BUTTON_B_OFF):
-                print("Actuator stop")
-                write_arduino(3, 0)
+                deposition_reverse #correct?
             elif command[1] == BUTTON_Y_ON:
                 # Linear actuator forward
                 print("Actuator forward")
@@ -365,26 +394,6 @@ def main():
                 position_servo_pitch = 180
             print(position_servo_pitch)
             write_arduino(2, position_servo_pitch)
-        elif command[0] == 7:
-            print("Servo 3")
-            degree = command[1]
-            position_servo_yaw += degree
-            if position_servo_yaw < 0:
-                position_servo_yaw = 0
-            elif position_servo_yaw > 180:
-                position_servo_yaw = 180
-            print(position_servo_yaw)
-            write_arduino(3, position_servo_yaw)
-        elif command[0] == 9:
-            print("Servo 4")
-            degree = command[1]
-            position_servo_yaw += degree
-            if position_servo_yaw < 0:
-                position_servo_yaw = 0
-            elif position_servo_yaw > 180:
-                position_servo_yaw = 180
-            print(position_servo_yaw)
-            write_arduino(4, position_servo_yaw)
         elif command[0] == 6:
             WHEEL_SPEED = round(float(command[1]*1.0)/float(255),2)
             print("Bucket ladder speed: %s" % (str(WHEEL_SPEED)))
