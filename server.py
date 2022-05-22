@@ -6,6 +6,7 @@ import time
 import threading
 import usb1
 import math
+import os
 
 # Constants
 STOP = 0
@@ -59,8 +60,8 @@ all_left_wheel_motors = []
 all_ladder_position_motors = []
 all_digging_motors = []
 arduino = None
-position_servo_pitch = 0
-position_servo_yaw = 0
+position_servo_pitch = 130
+position_servo_yaw = 100
 
 def should_ramp_up_motors(current_time, speed):
     # Only ramp up if speed is greater than 20% and we haven't already ramped up
@@ -171,11 +172,11 @@ def raise_bucket_ladder(serial, dev):
         #print("Error: %s" % str(e))
         return
 
-def dig_bucket_ladder(serial, dev):
+def dig_bucket_ladder(serial, dev, WHEEL_SPEED):
     global CURRENT_ACTION, DIG, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
     dev.claimInterface(0)
     if serial == SER_LADDER_DIG:
-        dev.bulkWrite(0x02, generate_speed(0.15), timeout=1000) # Locked at 15%
+        dev.bulkWrite(0x02, generate_speed(WHEEL_SPEED), timeout=1000) # Locked at 15%
     else:
         raise Exception("Unknown serial detected: %s" % serial)
     try:
@@ -187,19 +188,37 @@ def dig_bucket_ladder(serial, dev):
 
 def write_arduino(num, deg):
     global arduino
-    arduino.write(struct.pack('BB', num, deg))
+    try:
+        arduino.write(struct.pack('BB', num, deg))
+    except Exception:
+        print("Lost connection to Arduino. Attempting to re-establish..")
+        open_arduino()
+        arduino.write(struct.pack('BB', num, deg))
     time.sleep(0.05)
     return
 
-def open_dev(usbcontext=None):
+def open_arduino():
     global arduino
-    # TODO: Improve this
-    try:
-        arduino = ser.Serial('/dev/ttyACM0', baudrate=9600, timeout=.1)
-    except Exception:
-        arduino = ser.Serial('/dev/ttyACM1', baudrate=9600, timeout=.1)
-    write_arduino(1, 0)
-    write_arduino(2, 0)
+    attempts = 1
+    max_attempts = 30
+    serial_devices = os.listdir("/dev/serial/by-path/")
+    # Assume only an Arduino is connected
+    while attempts <= max_attempts:
+        try:
+            print("Attempting to connect to Arduino (%i)" % attempts)
+            arduino = ser.Serial("/dev/serial/by-path/%s" % (serial_devices[0]), baudrate=9600, timeout=.1)
+            return
+        except Exception:
+            print("Failed")
+            attempts += 1
+            time.sleep(1)
+    print("Could not find an Arduino connected to this system")
+    sys.exit(1)
+
+def open_dev(usbcontext=None):
+    open_arduino()
+    #write_arduino(1, 0)
+    #write_arduino(2, 0)
 
     if usbcontext is None:
         usbcontext = usb1.USBContext()
@@ -222,17 +241,11 @@ def open_dev(usbcontext=None):
                 all_right_wheel_motors.append((serial, motor))
             elif serial in [SER_LADDER_LIFT]:
                 all_ladder_position_motors.append((serial, motor))
+            elif serial in [SER_LADDER_DIG]:
+                all_digging_motors.append((serial, motor))
             else:
                 #raise Exception("Unable to recognize attached Spark MAX motor controller with serial number: %s" % serial)
                 pass
-            """
-            if serial in [SER_LADDER_DIG]:
-                all_digging_motors.append((serial, motor))
-            elif serial in [SER_FRONT_LEFT_1, SER_BACK_LEFT_2, SER_FRONT_RIGHT_3, SER_BACK_RIGHT_4]:
-                all_wheel_motors.append((serial, motor))
-            else:
-                raise Exception("Unable to recognize attached Spark MAX motor controller with serial number: %s" % serial)
-            """
     #if len(all_digging_motors) < 1:
     #    raise Exception("Insufficient digging motors detected")
     #if len(all_ladder_position_motors) < 1:
@@ -341,6 +354,11 @@ def main():
                 position_servo_pitch = 180
             print(position_servo_pitch)
             write_arduino(2, position_servo_pitch)
+        elif command[0] == 6:
+            WHEEL_SPEED = round(float(command[1]*1.0)/float(255),2)
+            print("Bucket ladder speed: %s" % (str(WHEEL_SPEED)))
+            t=threading.Thread(target=dig_bucket_ladder, args=(all_digging_motors[0][0], all_digging_motors[0][1], WHEEL_SPEED))
+            t.start()
         else:
             pass
     """
@@ -350,13 +368,6 @@ def main():
                    for motor in all_digging_motors+all_ladder_position_motors+all_right_wheel_motors+all_left_wheel_motors:
                        t=threading.Thread(target=kill, args=(motor[0],motor[1]))
                        t.start()
-           elif key == "x":
-               if CURRENT_ACTION == STOP:
-                   CURRENT_ACTION = DIG
-                   for motor in all_digging_motors:
-                       t=threading.Thread(target=dig_bucket_ladder, args=(motor[0],motor[1]))
-                       t.start()
-                   time.sleep(MOTOR_SLEEP)
         except Exception as e:
            # No input
            CURRENT_ACTION = STOP
