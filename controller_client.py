@@ -259,14 +259,14 @@ async def parse_command(loop):
                         button_pressed = command[-4] == 1
                         if (INPUT_ID == BUTTON_A_ON):
                                 if button_pressed:
-                                        print("\nA BUTTON PRESSED")
+                                        await send_commands(BUTTON_A_ON)
                                 else:
-                                        print("\nA BUTTON RELEASED")
+                                        await send_commands(BUTTON_A_OFF)
                         elif (INPUT_ID == BUTTON_B_ON):
                                 if button_pressed:
-                                        print("\nB BUTTON PRESSED")
+                                        await send_commands(BUTTON_B_ON)
                                 else:
-                                        print("\nB BUTTON RELEASED")
+                                        await send_commands(BUTTON_B_OFF)
                         elif (INPUT_ID == BUTTON_X_ON):
                                 if button_pressed:
                                         #print("\nX BUTTON PRESSED")
