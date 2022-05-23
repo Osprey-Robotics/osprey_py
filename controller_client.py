@@ -22,10 +22,13 @@ COMMAND_BUTTON_PRESS = 3
 COMMAND_LR_SERVO = 4
 COMMAND_UD_SERVO = 5
 COMMAND_BUCKET_LADDER = 6
+BUTTON_A_STATE = 0 # 0 is off, 1 is on
+BUTTON_B_STATE = 0 # 0 is off, 1 is on
 BUTTON_LB_STATE = 0 # 0 is off, 1 is on
 BUTTON_RB_STATE = 0 # 0 is off, 1 is on
 serverAddressPort = ("192.168.1.101", 20222)
 #serverAddressPort = ("192.168.1.217", 20222)
+#serverAddressPort = ("127.0.0.1", 20222)
 INPUT_TYPE = 0
 new_commands = []
 # Bandwidth saving threshold, 0-127
@@ -166,25 +169,24 @@ async def send_commands(button=None):
                 print("Sending linear actuator forward stop")
                 UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_Y_OFF), serverAddressPort)
                 return
-        # Send the DPAD commands
         if button == DPAD_LEFT_ON:
             print("Sending DPAD left")
-            degree = -5
+            degree = 5
             UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_LR_SERVO, degree), serverAddressPort)
             return
         if button == DPAD_RIGHT_ON:
             print("Sending DPAD right")
-            degree = 5
+            degree = -5
             UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_LR_SERVO, degree), serverAddressPort)
             return
         if button == DPAD_UP_ON:
             print("Sending DPAD up")
-            degree = 5
+            degree = -5
             UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_UD_SERVO, degree), serverAddressPort)
             return
         if button == DPAD_DOWN_ON:
             print("Sending DPAD down")
-            degree = -5
+            degree = 5
             UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_UD_SERVO, degree), serverAddressPort)
             return
         if abs(current_speed_right) > 0:
@@ -205,38 +207,25 @@ async def send_commands(button=None):
                 #print("\rSending bucket ladder speed:  %s%s (%s)" % (speed_sign, str(abs(current_speed_bucket_ladder)).zfill(3), str(time.time())), end = '')
                 print("Sending bucket ladder speed:  %s%s (%s)" % (speed_sign, str(abs(current_speed_bucket_ladder+effective_bonus_speed)).zfill(3), str(time.time())))
                 UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUCKET_LADDER, current_speed_bucket_ladder+effective_bonus_speed), serverAddressPort)
+        if BUTTON_A_STATE == 1:
+                print("Sending deposition bucket forward")
+                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_A_ON), serverAddressPort)
+        if BUTTON_B_STATE == 1:
+                print("Sending deposition bucket reverse")
+                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_B_ON), serverAddressPort)
         if BUTTON_LB_STATE == 1:
                 print("Sending bucket ladder up")
                 UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_LB_ON), serverAddressPort)
         if BUTTON_RB_STATE == 1:
                 print("Sending bucket ladder down")
                 UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_RB_ON), serverAddressPort)
-        # TODO: Deposition
-                #Send the A/B Command
-        if button == BUTTON_A_ON:
-                print("Sending depostition bucket reverse start")
-                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_A_ON), serverAddressPort)
-                return
-        if button == BUTTON_A_OFF:
-                print("Sending deposition bucket reverse stop")
-                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_A_OFF), serverAddressPort)
-                return
-        if button == BUTTON_B_ON:
-                print("Sending deposition bucket forward start")
-                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_B_ON), serverAddressPort)
-                return
-        if button == BUTTON_B_OFF:
-                print("Sending deposition bucket forward stop")
-                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_B_OFF), serverAddressPort)
-                return
-        # TODO: Camera movement
-        if (current_speed_right == 0) and (current_speed_left == 0) and (current_speed_bucket_ladder == 0) and (button is None) and (BUTTON_LB_STATE == 0) and (BUTTON_RB_STATE == 0):
+        if (current_speed_right == 0) and (current_speed_left == 0) and (current_speed_bucket_ladder == 0) and (button is None) and (BUTTON_A_STATE == 0) and (BUTTON_B_STATE == 0) and (BUTTON_LB_STATE == 0) and (BUTTON_RB_STATE == 0):
                 print("Unrecognized action")
         return
 
 # Parse commands from controller
 async def parse_command(loop):
-        global current_speed_right, current_speed_left, current_speed_bucket_ladder, new_commands, bonus_speed, bonus_speed_bucket_ladder, bonus_speed_max, BUTTON_LB_STATE, BUTTON_RB_STATE
+        global current_speed_right, current_speed_left, current_speed_bucket_ladder, new_commands, bonus_speed, bonus_speed_bucket_ladder, bonus_speed_max, BUTTON_A_STATE, BUTTON_B_STATE, BUTTON_LB_STATE, BUTTON_RB_STATE
         while True:
                 if len(new_commands) > 0:
                         if bonus_speed > 0:
@@ -249,7 +238,7 @@ async def parse_command(loop):
                                 bonus_speed += 1
                         if (bonus_speed_bucket_ladder < bonus_speed_max) and (abs(current_speed_bucket_ladder) >= 100):
                                 bonus_speed_bucket_ladder += 1
-                        if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0) or (abs(current_speed_bucket_ladder) > 0) or (BUTTON_LB_STATE == 1) or (BUTTON_RB_STATE == 1):
+                        if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0) or (abs(current_speed_bucket_ladder) > 0) or (BUTTON_A_STATE == 1) or (BUTTON_B_STATE == 1) or (BUTTON_LB_STATE == 1) or (BUTTON_RB_STATE == 1):
                                 await send_commands()
                         await asyncio.sleep(.01)
                         continue
@@ -259,13 +248,21 @@ async def parse_command(loop):
                         button_pressed = command[-4] == 1
                         if (INPUT_ID == BUTTON_A_ON):
                                 if button_pressed:
+                                        #print("\nA BUTTON PRESSED")
+                                        BUTTON_A_STATE = 1
                                         await send_commands(BUTTON_A_ON)
                                 else:
+                                        #print("\nA BUTTON RELEASED")
+                                        BUTTON_A_STATE = 0
                                         await send_commands(BUTTON_A_OFF)
                         elif (INPUT_ID == BUTTON_B_ON):
                                 if button_pressed:
+                                        #print("\nB BUTTON PRESSED")
+                                        BUTTON_B_STATE = 1
                                         await send_commands(BUTTON_B_ON)
                                 else:
+                                        #print("\nB BUTTON RELEASED")
+                                        BUTTON_B_STATE = 0
                                         await send_commands(BUTTON_B_OFF)
                         elif (INPUT_ID == BUTTON_X_ON):
                                 if button_pressed:
@@ -368,7 +365,7 @@ async def parse_command(loop):
                 else:
                         #print(command)
                         pass
-                if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0) or (abs(current_speed_bucket_ladder) > 0) or (BUTTON_LB_STATE == 1) or (BUTTON_RB_STATE == 1):
+                if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0) or (abs(current_speed_bucket_ladder) > 0) or (BUTTON_A_STATE == 1) or (BUTTON_B_STATE == 1) or (BUTTON_LB_STATE == 1) or (BUTTON_RB_STATE == 1):
                         await send_commands()
 
                 # Schedule to run again in .01 seconds
