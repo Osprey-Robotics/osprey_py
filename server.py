@@ -187,8 +187,8 @@ def dig_bucket_ladder(serial, dev, WHEEL_SPEED):
         #print("Error: %s" % str(e))
         return
 
-def deposition_forward(serial, dev):
-    global CURRENT_ACTION, DOWN, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
+def forward_deposition(serial, dev):
+    global CURRENT_ACTION, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
     dev.claimInterface(0)
     if serial == SER_DEPOSITION:
         dev.bulkWrite(0x02, generate_speed(0.30), timeout=1000) # Locked at 30%
@@ -201,8 +201,8 @@ def deposition_forward(serial, dev):
         #print("Error: %s" % str(e))
         return
 
-def deposition_reverse(serial, dev):
-    global CURRENT_ACTION, UP, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
+def reverse_deposition(serial, dev):
+    global CURRENT_ACTION, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
     dev.claimInterface(0)
     if serial == SER_DEPOSITION:
         dev.bulkWrite(0x02, generate_speed(-0.30), timeout=1000) # Locked at -30%
@@ -215,11 +215,28 @@ def deposition_reverse(serial, dev):
         #print("Error: %s" % str(e))
         return
 
-    
+def stop_deposition(serial, dev):
+    global CURRENT_ACTION, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
+    dev.claimInterface(0)
+    if serial == SER_DEPOSITION:
+        dev.bulkWrite(0x02, generate_speed(0), timeout=1000)
+    else:
+        raise Exception("Unknown serial detected: %s" % serial)
+    try:
+        dev.bulkWrite(0x02, binascii.a2b_hex(COMM_FORWARD))
+        LAST_DRIVE = time.time()
+    except Exception as e:
+        #print("Error: %s" % str(e))
+        return
+
 def write_arduino(num, deg):
     global arduino
     try:
         arduino.write(struct.pack('BB', num, deg))
+        line=arduino.readline().decode().splitlines()[0]
+        if (line != "ACK") and not (line.startswith("Hit:")):
+            print("Lost connection to Arduino. Attempting to re-establish..")
+            open_arduino()
     except Exception:
         print("Lost connection to Arduino. Attempting to re-establish..")
         open_arduino()
@@ -229,14 +246,21 @@ def write_arduino(num, deg):
 
 def open_arduino():
     global arduino
+    if arduino is not None:
+        print("Closing Arduino (timeout)")
+        arduino.close()
     attempts = 1
     max_attempts = 30
-    serial_devices = os.listdir("/dev/serial/by-path/")
     # Assume only an Arduino is connected
     while attempts <= max_attempts:
         try:
             print("Attempting to connect to Arduino (%i)" % attempts)
+            serial_devices = os.listdir("/dev/serial/by-path/")
             arduino = ser.Serial("/dev/serial/by-path/%s" % (serial_devices[0]), baudrate=9600, timeout=.1)
+            #arduino.dtr(True)
+            #arduino.dtr(False)
+            write_arduino(1, position_servo_pitch)
+            write_arduino(2, position_servo_yaw)
             return
         except Exception:
             print("Failed")
@@ -273,24 +297,27 @@ def open_dev(usbcontext=None):
                 all_ladder_position_motors.append((serial, motor))
             elif serial in [SER_LADDER_DIG]:
                 all_digging_motors.append((serial, motor))
-            elif serial in [SER_DEPOSITION]
-                all_deposition_motors.append((serial,motor))
+            elif serial in [SER_DEPOSITION]:
+                all_deposition_motors.append((serial, motor))
             else:
                 #raise Exception("Unable to recognize attached Spark MAX motor controller with serial number: %s" % serial)
                 pass
-    #if len(all_digging_motors) < 1:
-    #    raise Exception("Insufficient digging motors detected")
-    #if len(all_ladder_position_motors) < 1:
-    #    raise Exception("Insufficient ladder position motors detected")
-    #if len(all_left_wheel_motors+all_right_wheel_motors) < 4:
-    #    raise Exception("Insufficient wheel motors detected")
+    # TODO: Recursively attempt to detect motors until the target number of motors have been reached or an exception has been raised (e.g. max attempts)
+    if len(all_deposition_motors) < 1:
+        raise Exception("Insufficient deposition motors detected")
+    if len(all_digging_motors) < 1:
+        raise Exception("Insufficient digging motors detected")
+    if len(all_ladder_position_motors) < 1:
+        raise Exception("Insufficient ladder position motors detected")
+    if len(all_left_wheel_motors+all_right_wheel_motors) < 4:
+        raise Exception("Insufficient wheel motors detected")
 
 def main():
-    global CURRENT_ACTION, STOP, FORWARD, RIGHT_SIDE, LEFT_SIDE, BUTTON_START_ON, all_digging_motors, all_ladder_position_motors, all_right_wheel_motors, all_left_wheel_motors, arduino, position_servo_pitch, position_servo_yaw
+    global CURRENT_ACTION, STOP, FORWARD, RIGHT_SIDE, LEFT_SIDE, BUTTON_START_ON, all_digging_motors, all_ladder_position_motors, all_right_wheel_motors, all_left_wheel_motors, all_deposition_motors, arduino, position_servo_pitch, position_servo_yaw
     print("Osprey Robotics Control Server")
     usbcontext = usb1.USBContext()
     open_dev(usbcontext)
-    print("%i motors detected\n" % len(all_digging_motors+all_ladder_position_motors+all_right_wheel_motors+all_left_wheel_motors))
+    print("%i motors detected (expect 7)\n" % len(all_digging_motors+all_ladder_position_motors+all_deposition_motors+all_right_wheel_motors+all_left_wheel_motors))
     #command = b""
     localIP     = "0.0.0.0"
     localPort   = 20222
@@ -309,7 +336,7 @@ def main():
         #clientIP  = "Client IP Address:{}".format(address)
         #print(list(message))
         command = struct.unpack('>Bh', message)
-        print(command) # DEBUG
+        #print(command) # DEBUG
         # 0: Brake
         # 1: Drive right side
         if command[0] == 1:
@@ -345,11 +372,17 @@ def main():
             elif command[1] == BUTTON_A_ON:
                 # Deposition bucket forward
                 print("Deposition forward")
-                depositon_forward #correct?
+                t=threading.Thread(target=forward_deposition, args=(all_deposition_motors[0][0], all_deposition_motors[0][1]))
+                t.start()
             elif command[1] == BUTTON_B_ON:
                 # Deposition bucket reverse
                 print("Deposition reverse")
-                deposition_reverse #correct?
+                t=threading.Thread(target=reverse_deposition, args=(all_deposition_motors[0][0], all_deposition_motors[0][1]))
+                t.start()
+            elif (command[1] == BUTTON_A_OFF) or (command[1] == BUTTON_B_OFF):
+                print("Deposition stop")
+                t=threading.Thread(target=stop_deposition, args=(all_deposition_motors[0][0], all_deposition_motors[0][1]))
+                t.start()
             elif command[1] == BUTTON_Y_ON:
                 # Linear actuator forward
                 print("Actuator forward")
@@ -357,7 +390,6 @@ def main():
             elif command[1] == BUTTON_X_ON:
                 # Linear actuator reverse
                 print("Actuator reverse")
-                write_arduino(5, 0)
             elif (command[1] == BUTTON_X_OFF) or (command[1] == BUTTON_Y_OFF):
                 print("Actuator stop")
                 write_arduino(3, 0)
@@ -375,25 +407,23 @@ def main():
                 #print("Received button event: %i" % command[1])
                 pass
         elif command[0] == 4:
-            print("Servo 1")
-            degree = command[1]
-            position_servo_yaw += degree
-            if position_servo_yaw < 0:
-                position_servo_yaw = 0
-            elif position_servo_yaw > 180:
-                position_servo_yaw = 180
-            print(position_servo_yaw)
-            write_arduino(1, position_servo_yaw)
-        elif command[0] == 5:
-            print("Servo 2")
             degree = command[1]
             position_servo_pitch += degree
             if position_servo_pitch < 0:
                 position_servo_pitch = 0
             elif position_servo_pitch > 180:
                 position_servo_pitch = 180
-            print(position_servo_pitch)
+            print("Servo 2: %i" % (position_servo_pitch))
             write_arduino(2, position_servo_pitch)
+        elif command[0] == 5:
+            degree = command[1]
+            position_servo_yaw += degree
+            if position_servo_yaw < 0:
+                position_servo_yaw = 0
+            elif position_servo_yaw > 180:
+                position_servo_yaw = 180
+            print("Servo 1: %i" % (position_servo_yaw))
+            write_arduino(1, position_servo_yaw)
         elif command[0] == 6:
             WHEEL_SPEED = round(float(command[1]*1.0)/float(255),2)
             print("Bucket ladder speed: %s" % (str(WHEEL_SPEED)))
