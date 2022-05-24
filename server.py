@@ -36,7 +36,7 @@ BUTTON_LT_CLICK_OFF = 109
 BUTTON_RT_CLICK_ON = 10
 BUTTON_RT_CLICK_OFF = 110
 MOTOR_SLEEP = 0.05 #0.4
-LIMIT_SWITCH_WAIT = 0.5
+LIMIT_SWITCH_WAIT = 1
 RIGHT_SIDE = 1
 LEFT_SIDE = 2
 LAST_DRIVE_WAIT = 1.0
@@ -67,11 +67,14 @@ arduino_error_count = 0
 position_servo_pitch = 0
 position_servo_yaw = 0
 read_arduino_thread_locked = False
-limit_switch_status = {"limit_actuator_extended": 0, "limit_bucket_ladder_bottom": 0, "limit_bucket_ladder_top": 0, "limit_deposition_back": 0, "limit_deposition_forward": 0}
+limit_switch_debounce_timer = 1
+# The first number is the persistent state, the second is the last received value
+# This helps eliminate phantom limit switch presses
+limit_switch_status = {"limit_actuator_extended": [0,0], "limit_bucket_ladder_bottom": [0,0], "limit_bucket_ladder_top": [0,0], "limit_deposition_back": [0,0], "limit_deposition_forward": [0,0]}
 
 def is_limit_switch_pressed(limit_switch_id):
     global LIMIT_SWITCH_WAIT
-    return ((time.time()-limit_switch_status[limit_switch_id]) <= LIMIT_SWITCH_WAIT)
+    return ((time.time()-limit_switch_status[limit_switch_id][0]) <= LIMIT_SWITCH_WAIT)
 
 def should_ramp_up_motors(current_time, speed):
     # Only ramp up if speed is greater than 20% and we haven't already ramped up
@@ -158,7 +161,7 @@ def lower_bucket_ladder(serial, dev):
     global CURRENT_ACTION, DOWN, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
     dev.claimInterface(0)
     if serial == SER_LADDER_LIFT:
-        dev.bulkWrite(0x02, generate_speed(0.30), timeout=1000) # Locked at 30%
+        dev.bulkWrite(0x02, generate_speed(-0.30), timeout=1000) # Locked at 30%
     else:
         raise Exception("Unknown serial detected: %s" % serial)
     try:
@@ -172,7 +175,7 @@ def raise_bucket_ladder(serial, dev):
     global CURRENT_ACTION, UP, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
     dev.claimInterface(0)
     if serial == SER_LADDER_LIFT:
-        dev.bulkWrite(0x02, generate_speed(-0.30), timeout=1000) # Locked at -30%
+        dev.bulkWrite(0x02, generate_speed(0.30), timeout=1000) # Locked at -30%
     else:
         raise Exception("Unknown serial detected: %s" % serial)
     try:
@@ -239,7 +242,7 @@ def stop_deposition(serial, dev):
         return
 
 def read_arduino_thread():
-    global arduino_error_count, limit_switch_status
+    global arduino_error_count, limit_switch_status, limit_switch_debounce_timer
     t = threading.currentThread()
     while getattr(t, "do_run", True):
         try:
@@ -248,15 +251,20 @@ def read_arduino_thread():
             print("Error reading line from Arduino")
         if (line == b"ACK\r\n"):
             arduino_error_count -= 1
-        elif (line.startswith(b"Hit:") and (b"limit_deposition_forward" not in line)): # DEBUG
+        elif line.startswith(b"Hit: "):
             try:
-                limit_switch_id = line.decode().split("Hit: ")[1]
-                if limit_switch_id in limit_switch_status:
-                    limit_switch_status[limit_switch_id] = time.time()
-                    #print("Limit switch event: %s" % limit_switch_id)
+                limit_switch_id = line.decode().split("Hit: ")[1].strip()
+                # Eliminate phantom limit switch presses
+                hit_time = time.time()
+                if (limit_switch_id in limit_switch_status):
+                    if (hit_time-limit_switch_status[limit_switch_id][1])<=limit_switch_debounce_timer:
+                        limit_switch_status[limit_switch_id][0] = hit_time
+                        #print("Limit switch event: %s" % limit_switch_id) # DEBUG
+                    else:
+                        limit_switch_status[limit_switch_id][1] = hit_time
             except Exception:
                 pass
-        elif (b"limit_deposition_forward" in line) or (line == b""): # DEBUG
+        elif line == b"":
             pass
         else:
             print("DEBUG: %s" % (line))
@@ -409,12 +417,12 @@ def main():
                 usbcontext = usb1.USBContext()
                 open_dev(usbcontext)
                 print("Motor reset complete")
-            elif command[1] == BUTTON_A_ON:
+            elif (command[1] == BUTTON_A_ON) and (not is_limit_switch_pressed("limit_deposition_forward")):
                 # Deposition bucket forward
                 print("Deposition forward")
                 t=threading.Thread(target=forward_deposition, args=(all_deposition_motors[0][0], all_deposition_motors[0][1]))
                 t.start()
-            elif command[1] == BUTTON_B_ON:
+            elif (command[1] == BUTTON_B_ON) and (not is_limit_switch_pressed("limit_deposition_back")):
                 # Deposition bucket reverse
                 print("Deposition reverse")
                 t=threading.Thread(target=reverse_deposition, args=(all_deposition_motors[0][0], all_deposition_motors[0][1]))
@@ -434,14 +442,12 @@ def main():
             elif (command[1] == BUTTON_X_OFF) or (command[1] == BUTTON_Y_OFF):
                 print("Actuator stop")
                 write_arduino(3, 0)
-            elif command[1] == BUTTON_LB_ON:
+            elif (command[1] == BUTTON_LB_ON) and (not is_limit_switch_pressed("limit_bucket_ladder_top")):
                 # Bucket ladder up
-                print("Bucket ladder up")
                 t=threading.Thread(target=raise_bucket_ladder, args=(all_ladder_position_motors[0][0], all_ladder_position_motors[0][1]))
                 t.start()
-            elif command[1] == BUTTON_RB_ON:
+            elif (command[1] == BUTTON_RB_ON) and (not is_limit_switch_pressed("limit_bucket_ladder_bottom")):
                 # Bucket ladder down
-                print("Bucket ladder down")
                 t=threading.Thread(target=lower_bucket_ladder, args=(all_ladder_position_motors[0][0], all_ladder_position_motors[0][1]))
                 t.start()
             else:
