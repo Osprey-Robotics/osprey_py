@@ -36,6 +36,7 @@ BUTTON_LT_CLICK_OFF = 109
 BUTTON_RT_CLICK_ON = 10
 BUTTON_RT_CLICK_OFF = 110
 MOTOR_SLEEP = 0.05 #0.4
+LIMIT_SWITCH_WAIT = 0.5
 RIGHT_SIDE = 1
 LEFT_SIDE = 2
 LAST_DRIVE_WAIT = 1.0
@@ -61,8 +62,16 @@ all_ladder_position_motors = []
 all_digging_motors = []
 all_deposition_motors = []
 arduino = None
+read_arduino_thread_global = None
+arduino_error_count = 0
 position_servo_pitch = 0
 position_servo_yaw = 0
+read_arduino_thread_locked = False
+limit_switch_status = {"limit_actuator_extended": 0, "limit_bucket_ladder_bottom": 0, "limit_bucket_ladder_top": 0, "limit_deposition_back": 0, "limit_deposition_forward": 0}
+
+def is_limit_switch_pressed(limit_switch_id):
+    global LIMIT_SWITCH_WAIT
+    return ((time.time()-limit_switch_status[limit_switch_id]) <= LIMIT_SWITCH_WAIT)
 
 def should_ramp_up_motors(current_time, speed):
     # Only ramp up if speed is greater than 20% and we haven't already ramped up
@@ -191,7 +200,7 @@ def forward_deposition(serial, dev):
     global CURRENT_ACTION, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
     dev.claimInterface(0)
     if serial == SER_DEPOSITION:
-        dev.bulkWrite(0x02, generate_speed(0.30), timeout=1000) # Locked at 30%
+        dev.bulkWrite(0x02, generate_speed(-0.30), timeout=1000) # Locked at 30%
     else:
         raise Exception("Unknown serial detected: %s" % serial)
     try:
@@ -205,7 +214,7 @@ def reverse_deposition(serial, dev):
     global CURRENT_ACTION, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
     dev.claimInterface(0)
     if serial == SER_DEPOSITION:
-        dev.bulkWrite(0x02, generate_speed(-0.30), timeout=1000) # Locked at -30%
+        dev.bulkWrite(0x02, generate_speed(0.30), timeout=1000) # Locked at -30%
     else:
         raise Exception("Unknown serial detected: %s" % serial)
     try:
@@ -229,14 +238,39 @@ def stop_deposition(serial, dev):
         #print("Error: %s" % str(e))
         return
 
-def write_arduino(num, deg):
-    global arduino
-    try:
-        arduino.write(struct.pack('BB', num, deg))
-        line=arduino.readline()
-        if (line != b"ACK\r\n") and not (line.startswith(b"Hit:")):
+def read_arduino_thread():
+    global arduino_error_count, limit_switch_status
+    t = threading.currentThread()
+    while getattr(t, "do_run", True):
+        try:
+            line=arduino.readline()
+        except Exception:
+            print("Error reading line from Arduino")
+        if (line == b"ACK\r\n"):
+            arduino_error_count -= 1
+        elif (line.startswith(b"Hit:") and (b"limit_deposition_forward" not in line)): # DEBUG
+            try:
+                limit_switch_id = line.decode().split("Hit: ")[1]
+                if limit_switch_id in limit_switch_status:
+                    limit_switch_status[limit_switch_id] = time.time()
+                    #print("Limit switch event: %s" % limit_switch_id)
+            except Exception:
+                pass
+        elif (b"limit_deposition_forward" in line) or (line == b""): # DEBUG
+            pass
+        else:
+            print("DEBUG: %s" % (line))
+            arduino_error_count += 1
+            print("Error detected in serial communication: %i" % arduino_error_count)
+        if arduino_error_count >= 10:
             print("Lost connection to Arduino. Attempting to re-establish..")
             open_arduino()
+
+def write_arduino(num, deg):
+    global arduino, arduino_error_count
+    arduino_error_count += 1
+    try:
+        arduino.write(struct.pack('BB', num, deg))
     except Exception:
         print("Lost connection to Arduino. Attempting to re-establish..")
         open_arduino()
@@ -245,7 +279,7 @@ def write_arduino(num, deg):
     return
 
 def open_arduino():
-    global arduino
+    global arduino, read_arduino_thread_global, arduino_error_count
     if arduino is not None:
         print("Closing Arduino (timeout)")
         arduino.close()
@@ -262,6 +296,11 @@ def open_arduino():
             time.sleep(1)
             write_arduino(1, position_servo_pitch)
             write_arduino(2, position_servo_yaw)
+            arduino_error_count = 0
+            if read_arduino_thread_global is not None:
+                read_arduino_thread_global.do_run = False
+            read_arduino_thread_global=threading.Thread(target=read_arduino_thread, args=())
+            read_arduino_thread_global.start()
             return
         except Exception as e:
             print("Failed: %s" % (e))
