@@ -233,8 +233,8 @@ def write_arduino(num, deg):
     global arduino
     try:
         arduino.write(struct.pack('BB', num, deg))
-        line=arduino.readline().decode().splitlines()[0]
-        if (line != "ACK") and not (line.startswith("Hit:")):
+        line=arduino.readline()
+        if (line != b"ACK\r\n") and not (line.startswith(b"Hit:")):
             print("Lost connection to Arduino. Attempting to re-establish..")
             open_arduino()
     except Exception:
@@ -257,13 +257,14 @@ def open_arduino():
             print("Attempting to connect to Arduino (%i)" % attempts)
             serial_devices = os.listdir("/dev/serial/by-path/")
             arduino = ser.Serial("/dev/serial/by-path/%s" % (serial_devices[0]), baudrate=9600, timeout=.1)
-            #arduino.dtr(True)
-            #arduino.dtr(False)
+            arduino.dtr = False
+            arduino.dtr = True
+            time.sleep(1)
             write_arduino(1, position_servo_pitch)
             write_arduino(2, position_servo_yaw)
             return
-        except Exception:
-            print("Failed")
+        except Exception as e:
+            print("Failed: %s" % (e))
             attempts += 1
             time.sleep(1)
     print("Could not find an Arduino connected to this system")
@@ -386,10 +387,11 @@ def main():
             elif command[1] == BUTTON_Y_ON:
                 # Linear actuator forward
                 print("Actuator forward")
-                write_arduino(4, 0)
+                write_arduino(5, 0)
             elif command[1] == BUTTON_X_ON:
                 # Linear actuator reverse
                 print("Actuator reverse")
+                write_arduino(4, 0)
             elif (command[1] == BUTTON_X_OFF) or (command[1] == BUTTON_Y_OFF):
                 print("Actuator stop")
                 write_arduino(3, 0)
