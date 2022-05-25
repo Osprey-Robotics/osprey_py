@@ -71,9 +71,12 @@ limit_switch_debounce_timer = 1
 # The first number is the persistent state, the second is the last received value
 # This helps eliminate phantom limit switch presses
 limit_switch_status = {"limit_actuator_extended": [0,0], "limit_bucket_ladder_bottom": [0,0], "limit_bucket_ladder_top": [0,0], "limit_deposition_back": [0,0], "limit_deposition_forward": [0,0]}
+ignore_limit_switches = False
 
 def is_limit_switch_pressed(limit_switch_id):
-    global LIMIT_SWITCH_WAIT
+    global LIMIT_SWITCH_WAIT, ignore_limit_switches
+    if ignore_limit_switches == True:
+        return False
     return ((time.time()-limit_switch_status[limit_switch_id][0]) <= LIMIT_SWITCH_WAIT)
 
 def should_ramp_up_motors(current_time, speed):
@@ -383,7 +386,7 @@ def open_dev(usbcontext=None):
         raise Exception("Insufficient wheel motors detected")
 
 def main():
-    global CURRENT_ACTION, STOP, FORWARD, RIGHT_SIDE, LEFT_SIDE, BUTTON_START_ON, all_digging_motors, all_ladder_position_motors, all_right_wheel_motors, all_left_wheel_motors, all_deposition_motors, arduino, position_servo_pitch, position_servo_yaw
+    global CURRENT_ACTION, STOP, FORWARD, RIGHT_SIDE, LEFT_SIDE, BUTTON_START_ON, all_digging_motors, all_ladder_position_motors, all_right_wheel_motors, all_left_wheel_motors, all_deposition_motors, arduino, position_servo_pitch, position_servo_yaw, ignore_limit_switches
     print("Osprey Robotics Control Server")
     usbcontext = usb1.USBContext()
     open_dev(usbcontext)
@@ -464,6 +467,10 @@ def main():
             elif (command[1] == BUTTON_X_OFF) or (command[1] == BUTTON_Y_OFF):
                 print("Actuator stop")
                 write_arduino(3, 0)
+            elif command[1] == BUTTON_BACK_ON:
+                # Toggle limit switches
+                print("Toggling limit switches")
+                ignore_limit_switches = not ignore_limit_switches
             elif (command[1] == BUTTON_LB_ON) and (not is_limit_switch_pressed("limit_bucket_ladder_top")):
                 # Bucket ladder up
                 t=threading.Thread(target=raise_bucket_ladder, args=(all_ladder_position_motors[0][0], all_ladder_position_motors[0][1]))
