@@ -169,6 +169,10 @@ async def send_commands(button=None):
                 print("Sending linear actuator forward stop")
                 UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_Y_OFF), serverAddressPort)
                 return
+        if button == BUTTON_BACK_ON:
+                print("Sending limit switch toggle")
+                UDPClientSocket.sendto(struct.pack('>Bh', COMMAND_BUTTON_PRESS, BUTTON_BACK_ON), serverAddressPort)
+                return
         if button == DPAD_LEFT_ON:
             print("Sending DPAD left")
             degree = 5
@@ -240,7 +244,7 @@ async def parse_command(loop):
                                 bonus_speed_bucket_ladder += 1
                         if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0) or (abs(current_speed_bucket_ladder) > 0) or (BUTTON_A_STATE == 1) or (BUTTON_B_STATE == 1) or (BUTTON_LB_STATE == 1) or (BUTTON_RB_STATE == 1):
                                 await send_commands()
-                        await asyncio.sleep(.01)
+                        await asyncio.sleep(.05) # DEBUG
                         continue
                 INPUT_TYPE = command[-2]
                 INPUT_ID = command[-1]
@@ -294,11 +298,12 @@ async def parse_command(loop):
                                 else:
                                         #print("\nRB BUTTON RELEASED")
                                         BUTTON_RB_STATE = 0
+                        elif (INPUT_ID == BUTTON_BACK_ON) and button_pressed:
+                                #print("\nBACK BUTTON PRESSED")
+                                await send_commands(BUTTON_BACK_ON)
                         elif (INPUT_ID == BUTTON_START_ON) and button_pressed:
                                 #print("\nSTART BUTTON")
                                 await send_commands(BUTTON_START_ON)
-                        elif (INPUT_ID == BUTTON_BACK_ON) and button_pressed:
-                                print("\nBACK BUTTON")
                         #elif not button_pressed:
                         #        pass
                         else:
@@ -370,7 +375,7 @@ async def parse_command(loop):
 
                 # Schedule to run again in .01 seconds
                 #await asyncio.sleep(.01)
-                await asyncio.sleep(.01)
+                await asyncio.sleep(.05)
 
 if __name__ ==  '__main__':
         # Spawn file read thread
