@@ -89,7 +89,9 @@ def generate_speed(speed):
     speed = abs(speed)
     current_time = time.time()
     calculated_speed = 0
-    if should_ramp_up_motors(current_time, speed):
+    if speed == 0:
+        calculated_speed = 0
+    elif should_ramp_up_motors(current_time, speed):
         RAMP_PHASE = 0
         if is_positive:
             calculated_speed = 0.1 # Ramp up should begin at 10%
@@ -242,7 +244,7 @@ def stop_deposition(serial, dev):
         return
 
 def read_arduino_thread():
-    global arduino_error_count, limit_switch_status, limit_switch_debounce_timer
+    global arduino_error_count, limit_switch_status, limit_switch_debounce_timer, all_ladder_position_motors
     t = threading.currentThread()
     while getattr(t, "do_run", True):
         try:
@@ -262,12 +264,32 @@ def read_arduino_thread():
                         #print("Limit switch event: %s" % limit_switch_id) # DEBUG
                     else:
                         limit_switch_status[limit_switch_id][1] = hit_time
+                    # Force the wheels to turn off
+                    if is_limit_switch_pressed(limit_switch_id):
+                        if limit_switch_id == "limit_bucket_ladder_bottom":
+                            t=threading.Thread(target=raise_bucket_ladder, args=(all_ladder_position_motors[0][0], all_ladder_position_motors[0][1]))
+                            t.start()
+                        elif limit_switch_id == "limit_bucket_ladder_top":
+                            t=threading.Thread(target=lower_bucket_ladder, args=(all_ladder_position_motors[0][0], all_ladder_position_motors[0][1]))
+                            t.start()
+                        elif limit_switch_id == "limit_deposition_back":
+                            t=threading.Thread(target=stop_deposition, args=(all_deposition_motors[0][0], all_deposition_motors[0][1]))
+                            t.start()
+                            pass
+                        elif limit_switch_id == "limit_deposition_forward":
+                            t=threading.Thread(target=stop_deposition, args=(all_deposition_motors[0][0], all_deposition_motors[0][1]))
+                            t.start()
+                            pass
+                        else:
+                            pass
+                    else:
+                        pass
             except Exception:
                 pass
         elif line == b"":
             pass
         else:
-            print("DEBUG: %s" % (line))
+            #print("DEBUG: %s" % (line))
             arduino_error_count += 1
             print("Error detected in serial communication: %i" % arduino_error_count)
         if arduino_error_count >= 10:
@@ -407,7 +429,7 @@ def main():
             #WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1], command[2]]]
             if command[1] == BUTTON_START_ON:
                 print("Motor reset requested")
-                for motor in all_left_wheel_motors+all_right_wheel_motors:
+                for motor in all_left_wheel_motors+all_right_wheel_motors+all_ladder_position_motors+all_digging_motors+all_deposition_motors:
                     try:
                         motor[1].close()
                     except Exception as e:
