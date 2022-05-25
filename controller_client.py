@@ -244,7 +244,7 @@ async def parse_command(loop):
                                 bonus_speed_bucket_ladder += 1
                         if (abs(current_speed_right) > 0) or (abs(current_speed_left) > 0) or (abs(current_speed_bucket_ladder) > 0) or (BUTTON_A_STATE == 1) or (BUTTON_B_STATE == 1) or (BUTTON_LB_STATE == 1) or (BUTTON_RB_STATE == 1):
                                 await send_commands()
-                        await asyncio.sleep(.05) # DEBUG
+                        await asyncio.sleep(.01) # DEBUG
                         continue
                 INPUT_TYPE = command[-2]
                 INPUT_ID = command[-1]
@@ -375,7 +375,7 @@ async def parse_command(loop):
 
                 # Schedule to run again in .01 seconds
                 #await asyncio.sleep(.01)
-                await asyncio.sleep(.05)
+                await asyncio.sleep(.01)
 
 if __name__ ==  '__main__':
         # Spawn file read thread
