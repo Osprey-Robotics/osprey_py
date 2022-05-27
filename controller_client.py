@@ -10,6 +10,36 @@ import struct
 import sys
 import threading
 import time
+import http.client
+
+def find_the_joule(jouleHostname):
+    global routerIP
+    try:
+        print("Trying to reach the router (%s)" % routerIP)
+        connection = http.client.HTTPConnection(routerIP)
+        headers = {'Authorization': 'Basic YWRtaW46b3NwcmV5cm9ib3RpY3M='}
+        connection.request('GET', '/DHCPTable.asp', headers=headers)
+        response = connection.getresponse()
+        print("Reached the router (%s)" % routerIP)
+    except Exception:
+        print("Could not reach the router")
+    entry = [l for l in response.read().decode().splitlines() if jouleHostname in l]
+    jouleIP = None
+    try:
+        jouleIP = entry[0].split("'")[3]
+        print("Found Joule IP: %s" % jouleIP)
+    except Exception:
+        jouleIP = None
+    if "--ip" in sys.argv:
+        try:
+            ip_argv = sys.argv.index("--ip")
+            jouleIP = sys.argv[ip_argv+1]
+        except Exception:
+            jouleIP = None
+    if jouleIP is None:
+        print("Couldn't find Joule")
+        sys.exit(1)
+    return jouleIP
 
 # Program global variables
 current_speed_right = 0
@@ -26,9 +56,10 @@ BUTTON_A_STATE = 0 # 0 is off, 1 is on
 BUTTON_B_STATE = 0 # 0 is off, 1 is on
 BUTTON_LB_STATE = 0 # 0 is off, 1 is on
 BUTTON_RB_STATE = 0 # 0 is off, 1 is on
-serverAddressPort = ("192.168.1.101", 20222)
-#serverAddressPort = ("192.168.1.217", 20222)
-#serverAddressPort = ("127.0.0.1", 20222)
+jouleHostname = 'ospreyrobotics'
+routerIP = '192.168.1.1'
+jouleIP = find_the_joule(jouleHostname)
+serverAddressPort = (jouleIP, 20222)
 INPUT_TYPE = 0
 new_commands = []
 # Bandwidth saving threshold, 0-127
