@@ -19,7 +19,7 @@ int relay_1 = 7;
 int relay_2 = 6;
 int limit_bucket_ladder_top = 8;
 int limit_bucket_ladder_bottom = 10;
-int limit_deposition_forward = 11;
+int limit_deposition_forward = 5;
 int limit_actuator_extended = 12;
 int limit_deposition_back = 13;
 
@@ -33,11 +33,11 @@ void setup() {
     pinMode(9, INPUT);
     pinMode(3, INPUT);
 
-    pinMode(limit_bucket_ladder_top, INPUT);
-    pinMode(limit_bucket_ladder_bottom, INPUT);
-    pinMode(limit_deposition_forward, INPUT);
-    pinMode(limit_actuator_extended, INPUT);
-    pinMode(limit_deposition_back, INPUT);
+    pinMode(limit_bucket_ladder_top, INPUT_PULLUP);
+    pinMode(limit_bucket_ladder_bottom, INPUT_PULLUP);
+    pinMode(limit_deposition_forward, INPUT_PULLUP);
+    pinMode(limit_actuator_extended, INPUT_PULLUP);
+    pinMode(limit_deposition_back, INPUT_PULLUP);
 
     pinMode(relay_1, OUTPUT);
     pinMode(relay_2, OUTPUT);
@@ -84,7 +84,7 @@ void check_limit_switches() {
     if (digitalRead(limit_bucket_ladder_bottom) == HIGH) {
         Serial.println("Hit: limit_bucket_ladder_bottom");
     }
-    if (digitalRead(limit_deposition_forward) == LOW) {
+    if (digitalRead(limit_deposition_forward) == HIGH) {
         Serial.println("Hit: limit_deposition_forward");
     }
     if (digitalRead(limit_actuator_extended) == HIGH) { // && digitalRead(relay_1) == HIGH) {
