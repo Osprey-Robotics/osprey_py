@@ -1,7 +1,7 @@
 //Limit Switches Input 
 int limit_bucket_ladder_top = 8;
 int limit_bucket_ladder_bottom = 10;
-int limit_deposition_forward = 11; 
+int limit_deposition_forward = 5; 
 int limit_actuator_extended = 12; 
 int limit_deposition_back = 13; 
 
