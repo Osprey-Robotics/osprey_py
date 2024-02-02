@@ -12,6 +12,7 @@ import threading
 import time
 import http.client
 
+"""
 def find_the_joule(jouleHostname):
     global routerIP
     try:
@@ -40,6 +41,7 @@ def find_the_joule(jouleHostname):
         print("Couldn't find Joule")
         sys.exit(1)
     return jouleIP
+"""
 
 # Program global variables
 current_speed_right = 0
@@ -57,8 +59,8 @@ BUTTON_B_STATE = 0 # 0 is off, 1 is on
 BUTTON_LB_STATE = 0 # 0 is off, 1 is on
 BUTTON_RB_STATE = 0 # 0 is off, 1 is on
 jouleHostname = 'ospreyrobotics'
-routerIP = '192.168.1.1'
-jouleIP = find_the_joule(jouleHostname)
+#routerIP = '192.168.1.1'
+jouleIP = "192.168.1.101" #find_the_joule(jouleHostname)
 serverAddressPort = (jouleIP, 20222)
 INPUT_TYPE = 0
 new_commands = []
@@ -119,7 +121,8 @@ DPAD_DOWN_OFF = 114
 # Data streams
 UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 try:
-    controller_device = open(glob.glob("/dev/input/by-id/usb-Logitech_Gamepad_F310_????????-joystick")[0], "rb")
+#    controller_device = open(glob.glob("/dev/input/by-id/usb-Logitech_Gamepad_F310_????????-joystick")[0], "rb")
+    controller_device = open(glob.glob("/dev/input/js0")[0], "rb")
 except Exception:
     print("Could not find a controller connected to this system")
     sys.exit(1)
