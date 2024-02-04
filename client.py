@@ -1,3 +1,8 @@
+#  Copyright 2022 Osprey Robotics - UNF
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#
 # Osprey Robotics Controller Client
 # Note: "Bonus speed" affects wheels on each side of the robot
 #       So running the right side on 127 power will cause the left side to immediately catch up to 127 power
