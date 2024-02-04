@@ -1,4 +1,4 @@
-#  Copyright 2022 Osprey Robotics - UNF
+#  Copyright 2024 Osprey Robotics - UNF
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@ import threading
 import usb1
 import math
 import os
+import RPi.GPIO as GPIO
 
 # Constants
 STOP = 0
@@ -53,6 +54,13 @@ SER_BACK_RIGHT_4 = "205A336B4E55"
 SER_LADDER_DIG = "206A33544D43"
 SER_LADDER_LIFT = "206C395A5543"
 SER_DEPOSITION = "205D39515543"
+RELAY_1 = 26
+RELAY_2 = 20
+LIMIT_BUCKET_LADDER_TOP = 8
+LIMIT_BUCKET_LADDER_BOTTOM = 10
+LIMIT_DEPOSITION_FORWARD = 5
+LIMIT_ACTUATOR_EXTENDED = 12
+LIMIT_DEPOSITION_BACK = 13
 
 # TODO: Better interface for motor controller protocol, including timestamp/iterative-packed last bytes
 POSITIVE_HEX = "000000008400058208000000XXXXXXXX000000000af69afb"
@@ -67,12 +75,8 @@ all_left_wheel_motors = []
 all_ladder_position_motors = []
 all_digging_motors = []
 all_deposition_motors = []
-arduino = None
-read_arduino_thread_global = None
-arduino_error_count = 0
 position_servo_pitch = 0
 position_servo_yaw = 0
-read_arduino_thread_locked = False
 limit_switch_debounce_timer = 1
 # The first number is the persistent state, the second is the last received value
 # This helps eliminate phantom limit switch presses
@@ -252,106 +256,7 @@ def stop_deposition(serial, dev):
         #print("Error: %s" % str(e))
         return
 
-def read_arduino_thread():
-    global arduino_error_count, limit_switch_status, limit_switch_debounce_timer, all_ladder_position_motors
-    t = threading.currentThread()
-    while getattr(t, "do_run", True):
-        try:
-            line=arduino.readline()
-        except Exception:
-            print("Error reading line from Arduino")
-        if (line == b"ACK\r\n"):
-            arduino_error_count -= 1
-        elif line.startswith(b"Hit: "):
-            try:
-                limit_switch_id = line.decode().split("Hit: ")[1].strip()
-                # Eliminate phantom limit switch presses
-                hit_time = time.time()
-                if (limit_switch_id in limit_switch_status):
-                    if (hit_time-limit_switch_status[limit_switch_id][1])<=limit_switch_debounce_timer:
-                        limit_switch_status[limit_switch_id][0] = hit_time
-                        #print("Limit switch event: %s" % limit_switch_id) # DEBUG
-                    else:
-                        limit_switch_status[limit_switch_id][1] = hit_time
-                    # Force the wheels to turn off
-                    if is_limit_switch_pressed(limit_switch_id):
-                        if limit_switch_id == "limit_bucket_ladder_bottom":
-                            t=threading.Thread(target=raise_bucket_ladder, args=(all_ladder_position_motors[0][0], all_ladder_position_motors[0][1]))
-                            t.start()
-                        elif limit_switch_id == "limit_bucket_ladder_top":
-                            t=threading.Thread(target=lower_bucket_ladder, args=(all_ladder_position_motors[0][0], all_ladder_position_motors[0][1]))
-                            t.start()
-                        elif limit_switch_id == "limit_deposition_back":
-                            t=threading.Thread(target=stop_deposition, args=(all_deposition_motors[0][0], all_deposition_motors[0][1]))
-                            t.start()
-                            pass
-                        elif limit_switch_id == "limit_deposition_forward":
-                            t=threading.Thread(target=stop_deposition, args=(all_deposition_motors[0][0], all_deposition_motors[0][1]))
-                            t.start()
-                            pass
-                        else:
-                            pass
-                    else:
-                        pass
-            except Exception:
-                pass
-        elif line == b"":
-            pass
-        else:
-            #print("DEBUG: %s" % (line))
-            arduino_error_count += 1
-            print("Error detected in serial communication: %i" % arduino_error_count)
-        if arduino_error_count >= 10:
-            print("Lost connection to Arduino. Attempting to re-establish..")
-            open_arduino()
-
-def write_arduino(num, deg):
-    global arduino, arduino_error_count
-    arduino_error_count += 1
-    try:
-        arduino.write(struct.pack('BB', num, deg))
-    except Exception:
-        print("Lost connection to Arduino. Attempting to re-establish..")
-        open_arduino()
-        arduino.write(struct.pack('BB', num, deg))
-    time.sleep(0.05)
-    return
-
-def open_arduino():
-    global arduino, read_arduino_thread_global, arduino_error_count
-    if arduino is not None:
-        print("Closing Arduino (timeout)")
-        arduino.close()
-    attempts = 1
-    max_attempts = 30
-    # Assume only an Arduino is connected
-    while attempts <= max_attempts:
-        try:
-            print("Attempting to connect to Arduino (%i)" % attempts)
-            serial_devices = os.listdir("/dev/serial/by-path/")
-            arduino = ser.Serial("/dev/serial/by-path/%s" % (serial_devices[0]), baudrate=9600, timeout=.1)
-            arduino.dtr = False
-            arduino.dtr = True
-            time.sleep(1)
-            write_arduino(1, position_servo_pitch)
-            write_arduino(2, position_servo_yaw)
-            arduino_error_count = 0
-            if read_arduino_thread_global is not None:
-                read_arduino_thread_global.do_run = False
-            read_arduino_thread_global=threading.Thread(target=read_arduino_thread, args=())
-            read_arduino_thread_global.start()
-            return
-        except Exception as e:
-            print("Failed: %s" % (e))
-            attempts += 1
-            time.sleep(1)
-    print("Could not find an Arduino connected to this system")
-    sys.exit(1)
-
 def open_dev(usbcontext=None):
-    open_arduino()
-    #write_arduino(1, 0)
-    #write_arduino(2, 0)
 
     if usbcontext is None:
         usbcontext = usb1.USBContext()
@@ -392,12 +297,17 @@ def open_dev(usbcontext=None):
         raise Exception("Insufficient wheel motors detected")
 
 def main():
-    global CURRENT_ACTION, STOP, FORWARD, RIGHT_SIDE, LEFT_SIDE, BUTTON_START_ON, all_digging_motors, all_ladder_position_motors, all_right_wheel_motors, all_left_wheel_motors, all_deposition_motors, arduino, position_servo_pitch, position_servo_yaw, ignore_limit_switches
+    global CURRENT_ACTION, STOP, FORWARD, RIGHT_SIDE, LEFT_SIDE, BUTTON_START_ON, all_digging_motors, all_ladder_position_motors, all_right_wheel_motors, all_left_wheel_motors, all_deposition_motors, position_servo_pitch, position_servo_yaw, ignore_limit_switches
     print("Osprey Robotics Control Server")
     usbcontext = usb1.USBContext()
     open_dev(usbcontext)
     print("%i motors detected (expect 7)\n" % len(all_digging_motors+all_ladder_position_motors+all_deposition_motors+all_right_wheel_motors+all_left_wheel_motors))
     #command = b""
+    GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(RELAY_1, GPIO.OUT)
+    GPIO.setup(RELAY_2, GPIO.OUT)
+
     localIP     = "0.0.0.0"
     localPort   = 20222
     bufferSize  = 7 #1024
@@ -465,14 +375,15 @@ def main():
             elif command[1] == BUTTON_Y_ON:
                 # Linear actuator forward
                 print("Actuator forward")
-                write_arduino(5, 0)
+                GPIO.output(RELAY_1, GPIO.HIGH)
             elif command[1] == BUTTON_X_ON:
                 # Linear actuator reverse
                 print("Actuator reverse")
-                write_arduino(4, 0)
+                GPIO.output(RELAY_2, GPIO.HIGH)
             elif (command[1] == BUTTON_X_OFF) or (command[1] == BUTTON_Y_OFF):
                 print("Actuator stop")
-                write_arduino(3, 0)
+                GPIO.output(RELAY_1, GPIO.LOW)
+                GPIO.output(RELAY_2, GPIO.LOW)
             elif command[1] == BUTTON_BACK_ON:
                 # Toggle limit switches
                 print("Toggling limit switches")
@@ -496,7 +407,6 @@ def main():
             elif position_servo_pitch > 180:
                 position_servo_pitch = 180
             print("Servo 2: %i" % (position_servo_pitch))
-            write_arduino(2, position_servo_pitch)
         elif command[0] == 5:
             degree = command[1]
             position_servo_yaw += degree
@@ -505,7 +415,6 @@ def main():
             elif position_servo_yaw > 180:
                 position_servo_yaw = 180
             print("Servo 1: %i" % (position_servo_yaw))
-            write_arduino(1, position_servo_yaw)
         elif command[0] == 6:
             WHEEL_SPEED = round(float(command[1]*1.0)/float(255),2)
             print("Bucket ladder speed: %s" % (str(WHEEL_SPEED)))
