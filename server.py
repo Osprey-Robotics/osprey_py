@@ -172,83 +172,21 @@ def drive(serial, dev, SIDE_OF_ROBOT, WHEEL_SPEEDS):
         #print("Error: %s" % str(e))
         return
 
-def lower_bucket_ladder(serial, dev):
-    global CURRENT_ACTION, DOWN, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
-    dev.claimInterface(0)
-    if serial == SER_LADDER_LIFT:
-        dev.bulkWrite(0x02, generate_speed(-0.30), timeout=1000) # Locked at 30%
-    else:
-        raise Exception("Unknown serial detected: %s" % serial)
-    try:
-        dev.bulkWrite(0x02, binascii.a2b_hex(COMM_FORWARD))
-        LAST_DRIVE = time.time()
-    except Exception as e:
-        #print("Error: %s" % str(e))
-        return
+def actuate_motor(serialA, serialB, dev, speed):
+    """
+    Run a motor at a given speed based on the serial numbers
 
-def raise_bucket_ladder(serial, dev):
-    global CURRENT_ACTION, UP, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
-    dev.claimInterface(0)
-    if serial == SER_LADDER_LIFT:
-        dev.bulkWrite(0x02, generate_speed(0.30), timeout=1000) # Locked at -30%
-    else:
-        raise Exception("Unknown serial detected: %s" % serial)
-    try:
-        dev.bulkWrite(0x02, binascii.a2b_hex(COMM_FORWARD))
-        LAST_DRIVE = time.time()
-    except Exception as e:
-        #print("Error: %s" % str(e))
-        return
-
-def dig_bucket_ladder(serial, dev, WHEEL_SPEED):
+    :param serialA          the serial to be matched the variable
+    :param serialD          the constant serial to match the variable against
+    :param dev              usb device handle
+    :param speed            the speed to run the motor at
+    """
     global CURRENT_ACTION, DIG, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
     dev.claimInterface(0)
-    if serial == SER_LADDER_DIG:
-        dev.bulkWrite(0x02, generate_speed(WHEEL_SPEED), timeout=1000)
+    if serialA == serialB:
+        dev.bulkWrite(0x02, generate_speed(speed), timeout=1000)
     else:
-        raise Exception("Unknown serial detected: %s" % serial)
-    try:
-        dev.bulkWrite(0x02, binascii.a2b_hex(COMM_FORWARD))
-        LAST_DRIVE = time.time()
-    except Exception as e:
-        #print("Error: %s" % str(e))
-        return
-
-def forward_deposition(serial, dev):
-    global CURRENT_ACTION, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
-    dev.claimInterface(0)
-    if serial == SER_DEPOSITION:
-        dev.bulkWrite(0x02, generate_speed(-0.30), timeout=1000) # Locked at 30%
-    else:
-        raise Exception("Unknown serial detected: %s" % serial)
-    try:
-        dev.bulkWrite(0x02, binascii.a2b_hex(COMM_FORWARD))
-        LAST_DRIVE = time.time()
-    except Exception as e:
-        #print("Error: %s" % str(e))
-        return
-
-def reverse_deposition(serial, dev):
-    global CURRENT_ACTION, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
-    dev.claimInterface(0)
-    if serial == SER_DEPOSITION:
-        dev.bulkWrite(0x02, generate_speed(0.30), timeout=1000) # Locked at -30%
-    else:
-        raise Exception("Unknown serial detected: %s" % serial)
-    try:
-        dev.bulkWrite(0x02, binascii.a2b_hex(COMM_FORWARD))
-        LAST_DRIVE = time.time()
-    except Exception as e:
-        #print("Error: %s" % str(e))
-        return
-
-def stop_deposition(serial, dev):
-    global CURRENT_ACTION, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE
-    dev.claimInterface(0)
-    if serial == SER_DEPOSITION:
-        dev.bulkWrite(0x02, generate_speed(0), timeout=1000)
-    else:
-        raise Exception("Unknown serial detected: %s" % serial)
+        raise Exception("Unknown serial detected: %s" % serialA)
     try:
         dev.bulkWrite(0x02, binascii.a2b_hex(COMM_FORWARD))
         LAST_DRIVE = time.time()
@@ -361,16 +299,28 @@ def main():
             elif (command[1] == BUTTON_A_ON) and (not is_limit_switch_pressed("limit_deposition_forward")):
                 # Deposition bucket forward
                 print("Deposition forward")
-                t=threading.Thread(target=forward_deposition, args=(all_deposition_motors[0][0], all_deposition_motors[0][1]))
+                t=threading.Thread(target=actuate_motor,
+                                   args=(all_deposition_motors[0][0],
+                                         SER_DEPOSITION,
+                                         all_deposition_motors[0][1],
+                                         -0.30)) # Locked at -30%
                 t.start()
             elif (command[1] == BUTTON_B_ON) and (not is_limit_switch_pressed("limit_deposition_back")):
                 # Deposition bucket reverse
                 print("Deposition reverse")
-                t=threading.Thread(target=reverse_deposition, args=(all_deposition_motors[0][0], all_deposition_motors[0][1]))
+                t=threading.Thread(target=actuate_motor,
+                                   args=(all_deposition_motors[0][0],
+                                         SER_DEPOSITION,
+                                         all_deposition_motors[0][1],
+                                         0.30)) # Locked at 30%
                 t.start()
             elif (command[1] == BUTTON_A_OFF) or (command[1] == BUTTON_B_OFF):
                 print("Deposition stop")
-                t=threading.Thread(target=stop_deposition, args=(all_deposition_motors[0][0], all_deposition_motors[0][1]))
+                t=threading.Thread(target=actuate_motor,
+                                   args=(all_deposition_motors[0][0],
+                                         SER_DEPOSITION,
+                                         all_deposition_motors[0][1],
+                                         0))
                 t.start()
             elif command[1] == BUTTON_Y_ON:
                 # Linear actuator forward
@@ -390,11 +340,19 @@ def main():
                 ignore_limit_switches = not ignore_limit_switches
             elif (command[1] == BUTTON_LB_ON) and (not is_limit_switch_pressed("limit_bucket_ladder_top")):
                 # Bucket ladder up
-                t=threading.Thread(target=raise_bucket_ladder, args=(all_ladder_position_motors[0][0], all_ladder_position_motors[0][1]))
+                t=threading.Thread(target=actuate_motor,
+                                   args=(all_ladder_position_motors[0][0],
+                                         SER_LADDER_LIFT,
+                                         all_ladder_position_motors[0][1],
+                                         0.30)) # Locked at 30%
                 t.start()
             elif (command[1] == BUTTON_RB_ON) and (not is_limit_switch_pressed("limit_bucket_ladder_bottom")):
                 # Bucket ladder down
-                t=threading.Thread(target=lower_bucket_ladder, args=(all_ladder_position_motors[0][0], all_ladder_position_motors[0][1]))
+                t=threading.Thread(target=actuate_motor,
+                                   args=(all_ladder_position_motors[0][0],
+                                         SER_LADDER_LIFT,
+                                         all_ladder_position_motors[0][1],
+                                         -0.30)) # Locked at -30%
                 t.start()
             else:
                 #print("Received button event: %i" % command[1])
@@ -416,9 +374,13 @@ def main():
                 position_servo_yaw = 180
             print("Servo 1: %i" % (position_servo_yaw))
         elif command[0] == 6:
-            WHEEL_SPEED = round(float(command[1]*1.0)/float(255),2)
-            print("Bucket ladder speed: %s" % (str(WHEEL_SPEED)))
-            t=threading.Thread(target=dig_bucket_ladder, args=(all_digging_motors[0][0], all_digging_motors[0][1], WHEEL_SPEED))
+            speed = round(float(command[1]*1.0)/float(255),2)
+            print("Bucket ladder speed: %s" % (str(speed)))
+            t=threading.Thread(target=actuate_motor,
+                                args=(all_digging_motors[0][0],
+                                      SER_LADDER_DIG,
+                                      all_digging_motors[0][1],
+                                      speed))
             t.start()
         else:
             pass
