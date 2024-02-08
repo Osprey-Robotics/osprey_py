@@ -4,7 +4,6 @@
 #  you may not use this file except in compliance with the License.
 #
 
-import serial as ser
 import socket
 import binascii
 import struct
@@ -12,7 +11,6 @@ import time
 import threading
 import usb1
 import math
-import os
 import RPi.GPIO as GPIO
 
 # Constants
@@ -200,7 +198,6 @@ def open_dev(usbcontext=None):
     for udev in usbcontext.getDeviceList(skip_on_error=True):
         vid = udev.getVendorID()
         pid = udev.getProductID()
-        device = udev.getDeviceAddress()
         try:
             serial = udev.getSerialNumber()
         except Exception:
@@ -393,17 +390,5 @@ def main():
             t.start()
         else:
             pass
-    """
-           elif key == "k":
-               if CURRENT_ACTION != STOP:
-                   CURRENT_ACTION = STOP
-                   for motor in all_digging_motors+all_ladder_position_motors+all_right_wheel_motors+all_left_wheel_motors:
-                       t=threading.Thread(target=kill, args=(motor[0],motor[1]))
-                       t.start()
-        except Exception as e:
-           # No input
-           CURRENT_ACTION = STOP
-           pass
-"""
 
 main()
