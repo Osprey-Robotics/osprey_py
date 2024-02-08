@@ -235,13 +235,16 @@ def main():
     usbcontext = usb1.USBContext()
     open_dev(usbcontext)
     print("%i motors detected (expect 7)\n" % len(all_digging_motors+all_ladder_position_motors+all_deposition_motors+all_right_wheel_motors+all_left_wheel_motors))
-    #command = b""
+
+    # prepare GPIO
     GPIO.setwarnings(False)
     GPIO.setmode(GPIO.BCM)
+
+    # prepare GPIO relays for output
     GPIO.setup(RELAY_1, GPIO.OUT)
     GPIO.setup(RELAY_2, GPIO.OUT)
 
-    # prepare limit switches
+    # prepare limit switches for input
     GPIO.setup(LIMIT_BUCKET_LADDER_TOP, GPIO.IN)
     GPIO.setup(LIMIT_BUCKET_LADDER_BOTTOM, GPIO.IN)
     GPIO.setup(LIMIT_DEPOSITION_FORWARD, GPIO.IN)
@@ -261,15 +264,12 @@ def main():
     while(True):
         bytesAddressPair = UDPServerSocket.recvfrom(bufferSize)
         message = bytesAddressPair[0]
-        #address = bytesAddressPair[1]
-        #clientIP  = "Client IP Address:{}".format(address)
         #print(list(message))
         command = struct.unpack('>Bh', message)
         #print(command) # DEBUG
         # 0: Brake
         # 1: Drive right side
         if command[0] == 1:
-            #WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1], command[2]]]
             WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1]]]
             print("Sending right wheel speeds: %s" % str(WHEEL_SPEEDS))
             for motor in all_right_wheel_motors:
@@ -277,7 +277,6 @@ def main():
                 t.start()
         # 2: Drive left side
         elif command[0] == 2:
-            #WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1], command[2]]]
             WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1]]]
             print("Sending left wheel speeds: %s" % str(WHEEL_SPEEDS))
             for motor in all_left_wheel_motors:
@@ -285,7 +284,6 @@ def main():
                 t.start()
         # 3: Button press event
         elif command[0] == 3:
-            #WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1], command[2]]]
             if command[1] == BUTTON_START_ON:
                 print("Motor reset requested")
                 for motor in all_left_wheel_motors+all_right_wheel_motors+all_ladder_position_motors+all_digging_motors+all_deposition_motors:
