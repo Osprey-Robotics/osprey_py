@@ -78,16 +78,14 @@ all_deposition_motors = []
 position_servo_pitch = 0
 position_servo_yaw = 0
 limit_switch_debounce_timer = 1
-# The first number is the persistent state, the second is the last received value
-# This helps eliminate phantom limit switch presses
-limit_switch_status = {"limit_actuator_extended": [0,0], "limit_bucket_ladder_bottom": [0,0], "limit_bucket_ladder_top": [0,0], "limit_deposition_back": [0,0], "limit_deposition_forward": [0,0]}
 ignore_limit_switches = False
 
 def is_limit_switch_pressed(limit_switch_id):
     global LIMIT_SWITCH_WAIT, ignore_limit_switches
     if ignore_limit_switches == True:
         return False
-    return ((time.time()-limit_switch_status[limit_switch_id][0]) <= LIMIT_SWITCH_WAIT)
+    return GPIO.input(limit_switch_id, GPIO.HIGH)
+    # return ((time.time()-GPIO.input(limit_switch_id, GPIO.HIGH)) <= LIMIT_SWITCH_WAIT)
 
 def should_ramp_up_motors(current_time, speed):
     # Only ramp up if speed is greater than 20% and we haven't already ramped up
@@ -246,6 +244,13 @@ def main():
     GPIO.setup(RELAY_1, GPIO.OUT)
     GPIO.setup(RELAY_2, GPIO.OUT)
 
+    # prepare limit switches
+    GPIO.setup(LIMIT_BUCKET_LADDER_TOP, GPIO.IN)
+    GPIO.setup(LIMIT_BUCKET_LADDER_BOTTOM, GPIO.IN)
+    GPIO.setup(LIMIT_DEPOSITION_FORWARD, GPIO.IN)
+    GPIO.setup(LIMIT_ACTUATOR_EXTENDED, GPIO.IN)
+    GPIO.setup(LIMIT_DEPOSITION_BACK, GPIO.IN)
+
     localIP     = "0.0.0.0"
     localPort   = 20222
     bufferSize  = 7 #1024
@@ -296,7 +301,8 @@ def main():
                 usbcontext = usb1.USBContext()
                 open_dev(usbcontext)
                 print("Motor reset complete")
-            elif (command[1] == BUTTON_A_ON) and (not is_limit_switch_pressed("limit_deposition_forward")):
+            elif (command[1] == BUTTON_A_ON) and \
+                 (not is_limit_switch_pressed(LIMIT_DEPOSITION_FORWARD)):
                 # Deposition bucket forward
                 print("Deposition forward")
                 t=threading.Thread(target=actuate_motor,
@@ -305,7 +311,8 @@ def main():
                                          all_deposition_motors[0][1],
                                          -0.30)) # Locked at -30%
                 t.start()
-            elif (command[1] == BUTTON_B_ON) and (not is_limit_switch_pressed("limit_deposition_back")):
+            elif (command[1] == BUTTON_B_ON) and \
+                 (not is_limit_switch_pressed(LIMIT_DEPOSITION_BACK)):
                 # Deposition bucket reverse
                 print("Deposition reverse")
                 t=threading.Thread(target=actuate_motor,
@@ -338,7 +345,8 @@ def main():
                 # Toggle limit switches
                 print("Toggling limit switches")
                 ignore_limit_switches = not ignore_limit_switches
-            elif (command[1] == BUTTON_LB_ON) and (not is_limit_switch_pressed("limit_bucket_ladder_top")):
+            elif (command[1] == BUTTON_LB_ON) and \
+                 (not is_limit_switch_pressed(LIMIT_BUCKET_LADDER_TOP)):
                 # Bucket ladder up
                 t=threading.Thread(target=actuate_motor,
                                    args=(all_ladder_position_motors[0][0],
@@ -346,7 +354,8 @@ def main():
                                          all_ladder_position_motors[0][1],
                                          0.30)) # Locked at 30%
                 t.start()
-            elif (command[1] == BUTTON_RB_ON) and (not is_limit_switch_pressed("limit_bucket_ladder_bottom")):
+            elif (command[1] == BUTTON_RB_ON) and \
+                 (not is_limit_switch_pressed(LIMIT_BUCKET_LADDER_BOTTOM)):
                 # Bucket ladder down
                 t=threading.Thread(target=actuate_motor,
                                    args=(all_ladder_position_motors[0][0],
