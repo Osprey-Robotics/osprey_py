@@ -82,7 +82,7 @@ def is_limit_switch_pressed(limit_switch_id):
     global LIMIT_SWITCH_WAIT, ignore_limit_switches
     if ignore_limit_switches == True:
         return False
-    return GPIO.input(limit_switch_id, GPIO.HIGH)
+    return GPIO.input(limit_switch_id) == GPIO.HIGH
     # return ((time.time()-GPIO.input(limit_switch_id, GPIO.HIGH)) <= LIMIT_SWITCH_WAIT)
 
 def should_ramp_up_motors(current_time, speed):
