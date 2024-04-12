@@ -45,6 +45,9 @@ LIMIT_SWITCH_WAIT = 1
 RIGHT_SIDE = 1
 LEFT_SIDE = 2
 LAST_DRIVE_WAIT = 1.0
+LAST_UPD_LEFT = 0
+LAST_UPD_RIGHT = 0
+LAST_UPD_THRES = 0.1
 SER_FRONT_LEFT_1 = "2052376E5058"
 SER_BACK_LEFT_2 = "206B376F5557"
 SER_FRONT_RIGHT_3 = "205D39515543"
@@ -52,8 +55,6 @@ SER_BACK_RIGHT_4 = "206F37635557"
 SER_LADDER_DIG = "206A33544D43"
 SER_LADDER_LIFT = "206C395A5543"
 SER_DEPOSITION = "206D37675557"
-SER_LADDER_LIFT = "206C395A5543"
-SER_DEPOSITION = "205D39515543"
 RELAY_1 = 26
 RELAY_2 = 20
 LIMIT_BUCKET_LADDER_TOP = 9
@@ -84,7 +85,8 @@ def is_limit_switch_pressed(limit_switch_id):
     global LIMIT_SWITCH_WAIT, ignore_limit_switches
     if ignore_limit_switches == True:
         return False
-    return GPIO.input(limit_switch_id) == GPIO.HIGH
+    return False
+#    return GPIO.input(limit_switch_id) == GPIO.HIGH
     # return ((time.time()-GPIO.input(limit_switch_id, GPIO.HIGH)) <= LIMIT_SWITCH_WAIT)
 
 def should_ramp_up_motors(current_time, speed):
@@ -119,6 +121,13 @@ def generate_speed(speed):
             calculated_speed = speed
         else:
             calculated_speed = -speed
+
+    #if calculated_speed > 0.3:
+    #    calculated_speed = 0.3
+    #elif calculated_speed < -0.3:
+    #    calculated_speed = -0.3
+    #print(calculated_speed)
+
     return binascii.a2b_hex(POSITIVE_HEX.replace("XXXXXXXX", str(binascii.hexlify(struct.pack('<f', calculated_speed)), "ascii")))
 
 def kill(serial, dev):
@@ -142,7 +151,7 @@ def kill(serial, dev):
         #print("Error: %s" % str(e))
         return
 
-def drive(serial, dev, SIDE_OF_ROBOT, WHEEL_SPEEDS):
+def drive(serial, dev, SIDE_OF_ROBOT, WHEEL_SPEEDS, LAST_UPDATE):
     global CURRENT_ACTION, FORWARD, MOTOR_SLEEP, COMM_FORWARD, LAST_DRIVE, RIGHT_SIDE, LEFT_SIDE
     dev.claimInterface(0)
     if SIDE_OF_ROBOT == RIGHT_SIDE:
@@ -166,6 +175,7 @@ def drive(serial, dev, SIDE_OF_ROBOT, WHEEL_SPEEDS):
     try:
         dev.bulkWrite(0x02, binascii.a2b_hex(COMM_FORWARD))
         LAST_DRIVE = time.time()
+        LAST_UPDATE = time.time()
     except Exception as e:
         #print("Error: %s" % str(e))
         return
@@ -222,36 +232,37 @@ def open_dev(usbcontext=None):
                 #raise Exception("Unable to recognize attached Spark MAX motor controller with serial number: %s" % serial)
                 pass
     # TODO: Recursively attempt to detect motors until the target number of motors have been reached or an exception has been raised (e.g. max attempts)
-    if len(all_deposition_motors) < 1:
-        raise Exception("Insufficient deposition motors detected")
-    if len(all_digging_motors) < 1:
-        raise Exception("Insufficient digging motors detected")
-    if len(all_ladder_position_motors) < 1:
-        raise Exception("Insufficient ladder position motors detected")
-    if len(all_left_wheel_motors+all_right_wheel_motors) < 4:
-        raise Exception("Insufficient wheel motors detected")
+#    if len(all_deposition_motors) < 1:
+#        raise Exception("Insufficient deposition motors detected")
+#    if len(all_digging_motors) < 1:
+#        raise Exception("Insufficient digging motors detected")
+#    if len(all_ladder_position_motors) < 1:
+#        raise Exception("Insufficient ladder position motors detected")
+#    if len(all_left_wheel_motors+all_right_wheel_motors) < 4:
+#        raise Exception("Insufficient wheel motors detected")
 
 def main():
     global CURRENT_ACTION, STOP, FORWARD, RIGHT_SIDE, LEFT_SIDE, BUTTON_START_ON, all_digging_motors, all_ladder_position_motors, all_right_wheel_motors, all_left_wheel_motors, all_deposition_motors, position_servo_pitch, position_servo_yaw, ignore_limit_switches
+    global LAST_UPD_RIGHT, LAST_UPD_LEFT
     print("Osprey Robotics Control Server")
     usbcontext = usb1.USBContext()
     open_dev(usbcontext)
     print("%i motors detected (expect 7)\n" % len(all_digging_motors+all_ladder_position_motors+all_deposition_motors+all_right_wheel_motors+all_left_wheel_motors))
 
     # prepare GPIO
-    GPIO.setwarnings(False)
-    GPIO.setmode(GPIO.BCM)
+ #   GPIO.setwarnings(False)
+ #   GPIO.setmode(GPIO.BCM)
 
     # prepare GPIO relays for output
-    GPIO.setup(RELAY_1, GPIO.OUT)
-    GPIO.setup(RELAY_2, GPIO.OUT)
+ #   GPIO.setup(RELAY_1, GPIO.OUT)
+ #   GPIO.setup(RELAY_2, GPIO.OUT)
 
     # prepare limit switches for input
-    GPIO.setup(LIMIT_BUCKET_LADDER_TOP, GPIO.IN)
-    GPIO.setup(LIMIT_BUCKET_LADDER_BOTTOM, GPIO.IN)
-    GPIO.setup(LIMIT_DEPOSITION_FORWARD, GPIO.IN)
-    GPIO.setup(LIMIT_ACTUATOR_EXTENDED, GPIO.IN)
-    GPIO.setup(LIMIT_DEPOSITION_BACK, GPIO.IN)
+ #   GPIO.setup(LIMIT_BUCKET_LADDER_TOP, GPIO.IN)
+ #   GPIO.setup(LIMIT_BUCKET_LADDER_BOTTOM, GPIO.IN)
+ #   GPIO.setup(LIMIT_DEPOSITION_FORWARD, GPIO.IN)
+ #   GPIO.setup(LIMIT_ACTUATOR_EXTENDED, GPIO.IN)
+ #   GPIO.setup(LIMIT_DEPOSITION_BACK, GPIO.IN)
 
     localIP     = "0.0.0.0"
     localPort   = 20222
@@ -268,22 +279,27 @@ def main():
         message = bytesAddressPair[0]
         #print(list(message))
         command = struct.unpack('>Bh', message)
+        cur_time = time.time()
         #print(command) # DEBUG
         # 0: Brake
         # 1: Drive right side
         if command[0] == 1:
             WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1]]]
             print("Sending right wheel speeds: %s" % str(WHEEL_SPEEDS))
-            for motor in all_right_wheel_motors:
-                t=threading.Thread(target=drive, args=(motor[0], motor[1], RIGHT_SIDE, WHEEL_SPEEDS))
-                t.start()
+            if (cur_time-LAST_UPD_THRES >= LAST_UPD_RIGHT):
+                for motor in all_right_wheel_motors:
+                    t=threading.Thread(target=drive, args=(motor[0], motor[1], RIGHT_SIDE, WHEEL_SPEEDS, LAST_UPD_RIGHT))
+                    t.start()
+                LAST_UPD_RIGHT = time.time()
         # 2: Drive left side
         elif command[0] == 2:
             WHEEL_SPEEDS = [round(float(speed*.8)/float(128),2) for speed in [command[1]]]
             print("Sending left wheel speeds: %s" % str(WHEEL_SPEEDS))
-            for motor in all_left_wheel_motors:
-                t=threading.Thread(target=drive, args=(motor[0], motor[1], LEFT_SIDE, WHEEL_SPEEDS))
-                t.start()
+            if cur_time-LAST_UPD_THRES >= LAST_UPD_LEFT:
+                for motor in all_left_wheel_motors:
+                    t=threading.Thread(target=drive, args=(motor[0], motor[1], LEFT_SIDE, WHEEL_SPEEDS, LAST_UPD_LEFT))
+                    t.start()
+                LAST_UPD_LEFT = time.time()
         # 3: Button press event
         elif command[0] == 3:
             if command[1] == BUTTON_START_ON:
@@ -306,7 +322,7 @@ def main():
                                    args=(all_deposition_motors[0][0],
                                          SER_DEPOSITION,
                                          all_deposition_motors[0][1],
-                                         -0.30)) # Locked at -30%
+                                         -0.20)) # Locked at -30%
                 t.start()
             elif (command[1] == BUTTON_B_ON) and \
                  (not is_limit_switch_pressed(LIMIT_DEPOSITION_BACK)):
@@ -316,7 +332,7 @@ def main():
                                    args=(all_deposition_motors[0][0],
                                          SER_DEPOSITION,
                                          all_deposition_motors[0][1],
-                                         0.30)) # Locked at 30%
+                                         0.20)) # Locked at 30%
                 t.start()
             elif (command[1] == BUTTON_A_OFF) or (command[1] == BUTTON_B_OFF):
                 print("Deposition stop")
@@ -329,15 +345,15 @@ def main():
             elif command[1] == BUTTON_Y_ON:
                 # Linear actuator forward
                 print("Actuator forward")
-                GPIO.output(RELAY_1, GPIO.HIGH)
+#                GPIO.output(RELAY_1, GPIO.HIGH)
             elif command[1] == BUTTON_X_ON:
                 # Linear actuator reverse
                 print("Actuator reverse")
-                GPIO.output(RELAY_2, GPIO.HIGH)
+#                GPIO.output(RELAY_2, GPIO.HIGH)
             elif (command[1] == BUTTON_X_OFF) or (command[1] == BUTTON_Y_OFF):
                 print("Actuator stop")
-                GPIO.output(RELAY_1, GPIO.LOW)
-                GPIO.output(RELAY_2, GPIO.LOW)
+#                GPIO.output(RELAY_1, GPIO.LOW)
+#                GPIO.output(RELAY_2, GPIO.LOW)
             elif command[1] == BUTTON_BACK_ON:
                 # Toggle limit switches
                 print("Toggling limit switches")
